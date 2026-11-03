@@ -76,8 +76,10 @@ export function segments(text: string): Segment[] {
 
     const last = result.at(-1);
 
-    // The blank line under a line with a link is where its card shows.
+    // The blank line under a line with a link is where its card shows. It stays
+    // in the Client, as a copy leaves out the rows the hook reserves.
     if (line.trim() === "" && last?.kind === "text" && last.links.length > 0 && !last.hasRoom) {
+      last.rows.push({indent: 0, parts: []});
       last.hasRoom = true;
       continue;
     }
@@ -144,14 +146,16 @@ export function cardRows(names: string[], width: number) {
 // card is absolute, in blank rows of the line's own, as many as its names wrap
 // to: one in the flow moves the lines under it, so the pointer on it was on the
 // next line, and one over the text has no background to hide what is under it.
-function cards({Box, Markdown}: Table, links: Link[], indent: number, columns: number) {
+function cards({Box, Markdown}: Table, links: Link[], indent: number, columns: number, hasRoom: boolean) {
   const names = links.map(shortName);
+  const rows = cardRows(names, columns - indent - CARD_MARGIN);
 
+  // With a blank line of the Client's under the line, the card starts on it.
   return (
-    <Box height={cardRows(names, columns - indent - CARD_MARGIN)}>
+    <Box height={hasRoom ? rows - 1 : rows}>
       <Box
         position="absolute"
-        top={0}
+        top={hasRoom ? -1 : 0}
         left={indent}
         right={0}
         display="none"
@@ -201,7 +205,7 @@ export const register: Register = (on) => {
           return (
             <Box key={`link-${index}`} flexDirection="column">
               {client}
-              {cards(table, segment.links, segment.rows[0]?.indent ?? 0, columns)}
+              {cards(table, segment.links, segment.rows[0]?.indent ?? 0, columns, segment.hasRoom === true)}
             </Box>
           );
         })}

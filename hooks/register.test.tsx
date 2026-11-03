@@ -51,7 +51,7 @@ test("a reply splits into text, a link line taking the blank line under it, code
   expect(result.map((segment) => segment.kind).join()).toBe("text,text,code,text");
   expect(result[0]).toMatchObject({rows: [{isHeading: true, parts: [{text: "Title"}]}, {parts: []}, {}]});
   expect(result[1]).toMatchObject({
-    rows: [{indent: 2}],
+    rows: [{indent: 2}, {parts: []}],
     links: [{label: "the docs", url: "https://example.com/docs"}],
     hasRoom: true,
   });

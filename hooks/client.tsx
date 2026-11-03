@@ -16,7 +16,8 @@ export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSur
   const {Box, Text} = surface.elements;
 
   const lines = rows.map((row) => {
-    const children = row.parts.length === 0 ? [" "] : row.parts.map((each) => part(surface.elements, each));
+    // A blank line is a newline, not a space, so a copy of it holds nothing.
+    const children = row.parts.length === 0 ? ["\n"] : row.parts.map((each) => part(surface.elements, each));
     const props = row.isHeading ? {size: "title", weight: "bold"} : {size: "caption"};
 
     return <Box paddingLeft={row.indent}>{h(Text, {mono: true, ...props} as const, ...children)}</Box>;
