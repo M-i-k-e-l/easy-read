@@ -42,6 +42,19 @@ const RAISED = "⁰¹²³⁴⁵⁶⁷⁸⁹";
 // A table's line under its header: pipes, dashes, and colons for alignment.
 const SEPARATOR = /^\s*\|?(\s*:?-+:?\s*\|)*\s*:?-+:?\s*\|?\s*$/;
 const CELL_GAP = " │ ";
+// The mark after a character that asks for it drawn as an emoji (U+FE0F). The
+// mono font has its own text shape for some older symbols (⚡ ☕ ♈), which wins
+// over the emoji without it. It is added to those older symbols only, as the
+// newer emoji have no text shape, and not before a skin tone or a joiner, as
+// it would split 👍🏽 or 👨‍👩‍👧 apart.
+const EMOJI_STYLE = "\uFE0F";
+const NEEDS_EMOJI_STYLE = /\p{Emoji_Presentation}(?![\uFE0F\u200D\u{1F3FB}-\u{1F3FF}])/gu;
+
+export function asEmoji(text: string) {
+  return text.replace(NEEDS_EMOJI_STYLE, (letter) =>
+    (letter.codePointAt(0) ?? 0) < 0x10000 ? letter + EMOJI_STYLE : letter,
+  );
+}
 
 // A number in raised digits: 12 is ¹².
 export function raised(number: number) {
@@ -95,7 +108,10 @@ export function tableRows(lines: string[], addLink: (link: Link) => number | voi
         const parts = inline(cell.trim(), addLink);
         // In cells, as bold is drawn larger.
         const width = parts.reduce(
-          (sum, part) => sum + [...part.text + (part.mark ?? "")].length * (part.isBold ? BOLD_CELLS : LETTER_CELLS),
+          (sum, part) =>
+            sum +
+            [...part.text + (part.mark ?? "")].filter((letter) => letter !== EMOJI_STYLE).length *
+              (part.isBold ? BOLD_CELLS : LETTER_CELLS),
           0,
         );
 
@@ -165,8 +181,8 @@ export function segments(text: string): Segment[] {
     table = undefined;
   };
 
-  for (const line of text.split("\n")) {
-    const fence = FENCE.exec(line);
+  for (const written of text.split("\n")) {
+    const fence = FENCE.exec(written);
 
     if (fence) {
       endTable();
@@ -182,9 +198,11 @@ export function segments(text: string): Segment[] {
     }
 
     if (code) {
-      code.push(line);
+      code.push(written);
       continue;
     }
+
+    const line = asEmoji(written);
 
     // A table's lines are gathered, then drawn as rows when it ends.
     if (line.trimStart().startsWith("|")) {
@@ -274,7 +292,7 @@ export function lineWidth({indent, isHeading, parts}: Row) {
     const cells = isHeading ? HEADING_CELLS : isBold ? BOLD_CELLS : LETTER_CELLS;
 
     for (const letter of text + (mark ?? "")) {
-      width += (WIDE.test(letter) ? WIDE_SCALE : 1) * cells;
+      width += letter === EMOJI_STYLE ? 0 : (WIDE.test(letter) ? WIDE_SCALE : 1) * cells;
     }
   }
 

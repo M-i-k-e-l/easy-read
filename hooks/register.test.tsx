@@ -1,6 +1,6 @@
 import {expect, test} from "claude-code/testing";
 
-import {cardRows, inline, lineSize, lineWidth, raised, sameLineLeft, segments, shortName, tableRows} from "./register";
+import {asEmoji, cardRows, inline, lineSize, lineWidth, raised, sameLineLeft, segments, shortName, tableRows} from "./register";
 
 const REPLY = [
   "# Title",
@@ -94,6 +94,20 @@ test("a table with links is one run, its links numbered through it", () => {
     },
     {rows: [{parts: [{text: "After."}]}], links: []},
   ]);
+});
+
+test("an older symbol is asked to draw as an emoji, once, and never inside a skin tone, a flag or a joined emoji", () => {
+  expect(asEmoji("⚡ ☕ ♈")).toBe("⚡\uFE0F ☕\uFE0F ♈\uFE0F");
+  expect(asEmoji("❤\uFE0F ⚡\uFE0F")).toBe("❤\uFE0F ⚡\uFE0F");
+  expect(asEmoji("✊🏽 🚀 🇺🇸 👨‍👩‍👧")).toBe("✊🏽 🚀 🇺🇸 👨‍👩‍👧");
+  expect(segments("```\n⚡\n```\n⚡")).toMatchObject([
+    {kind: "code", lines: ["⚡"]},
+    {kind: "text", rows: [{parts: [{text: "⚡\uFE0F"}]}]},
+  ]);
+});
+
+test("the emoji mark takes no width", () => {
+  expect(lineWidth({indent: 0, parts: [{text: "⚡\uFE0F"}]})).toBe(lineWidth({indent: 0, parts: [{text: "⚡"}]}));
 });
 
 test("a reply splits into text, a link line taking the blank line under it, code and text", () => {
