@@ -35,6 +35,23 @@ test("bold is cut out, and a code span keeps its backticks and its stars", () =>
   ]);
 });
 
+test("italic is cut out of stars and underscores, inside bold too, and words with them inside stay as written", () => {
+  expect(inline("*a* _b_ **c *d*** ***e***", noLinks)).toEqual([
+    {text: "a", isItalic: true},
+    {text: " "},
+    {text: "b", isItalic: true},
+    {text: " "},
+    {text: "c ", isBold: true},
+    {text: "d", isBold: true, isItalic: true},
+    {text: " "},
+    {text: "e", isBold: true, isItalic: true},
+  ]);
+  expect(inline("snake_case_name, 2*3*4, a * star, `*c*`", noLinks)).toEqual([
+    {text: "snake_case_name, 2*3*4, a * star, "},
+    {text: "`*c*`"},
+  ]);
+});
+
 test("a link inside bold is bold, and is handed on for its card", () => {
   const links: unknown[] = [];
 

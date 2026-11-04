@@ -16,11 +16,11 @@ const BORDER = "single";
 const CELL_GAP = 0.25;
 
 // A link is underlined, and its number, raised and not underlined, follows it.
-function part({Text}: ClientElements, {text, isBold, isLink, mark}: Part) {
-  const bold: TextProps = isBold ? {size: "heading", weight: "bold"} : {};
-  const drawn = <Text {...bold} {...(isLink ? {underline: true} : {})}>{text}</Text>;
+function part({Text}: ClientElements, {text, isBold, isItalic, isLink, mark}: Part) {
+  const style: TextProps = {...(isBold ? {size: "heading", weight: "bold"} : {}), ...(isItalic ? {italic: true} : {})};
+  const drawn = <Text {...style} {...(isLink ? {underline: true} : {})}>{text}</Text>;
 
-  return mark ? [drawn, <Text {...bold}>{mark}</Text>] : [drawn];
+  return mark ? [drawn, <Text {...style}>{mark}</Text>] : [drawn];
 }
 
 // A table's row: a cell per column on a background, as wide as the column's
