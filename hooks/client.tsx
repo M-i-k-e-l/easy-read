@@ -22,6 +22,8 @@ const MARKER_GAP = 0.8;
 const QUOTE_BAR = 0.25;
 const QUOTE_GAP = 1;
 const QUOTE_COLOR = "inactive";
+// A rule, about a pixel high, in the header's grey, with space above and below.
+const RULE_HEIGHT = 0.05;
 
 // A link is underlined, and its number, raised and not underlined, follows it.
 function part({Text}: ClientElements, {text, isBold, isItalic, isStruck, isLink, mark}: Part) {
@@ -77,6 +79,16 @@ export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSur
       return grid(surface.elements, row, row.cells, row.widths);
     }
 
+    if (row.isRule) {
+      return quoted(
+        row,
+        isLast,
+        <Box paddingLeft={row.indent} paddingY="sm">
+          <Box flexGrow={1} height={RULE_HEIGHT} backgroundColor={HEADER_BACKGROUND} />
+        </Box>,
+      );
+    }
+
     // A blank line is a newline, not a space, so a copy of it holds nothing.
     const children = row.parts.length === 0 ? ["\n"] : row.parts.flatMap((each) => part(surface.elements, each));
     const props: TextProps = {
@@ -125,7 +137,7 @@ export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSur
       Box,
       {flexDirection: "row", columnGap: QUOTE_GAP, ...(isLast ? {flexGrow: 1} : {})},
       ...bars,
-      <Box flexShrink={1}>{line}</Box>,
+      <Box flexGrow={1} flexShrink={1} flexDirection="column">{line}</Box>,
     );
   }
 

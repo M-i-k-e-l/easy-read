@@ -184,6 +184,20 @@ test("a quote's >s are cut off and counted, and what is left is read as any line
   expect(lineWidth({indent: 0, quote: 2, parts: [{text: "abcde"}]})).toBe(7);
 });
 
+test("a line of only ---, *** or ___ is a rule, in a quote and right after a table too", () => {
+  expect(textRows("a\n---\n* * *\n> ___\n- - -\n--\n|x|\n|-|\n|1|\n---")).toMatchObject([
+    {parts: [{text: "a"}]},
+    {isRule: true, parts: []},
+    {isRule: true, parts: []},
+    {isRule: true, quote: 1, parts: []},
+    {isRule: true, parts: []},
+    {parts: [{text: "--"}]},
+    {isTable: true},
+    {isTable: true},
+    {isRule: true, parts: []},
+  ]);
+});
+
 test("a link line with no blank line under it still is a run of its own", () => {
   const result = segments("[a](https://a.example)\nnext");
 

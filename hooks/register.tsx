@@ -9,10 +9,12 @@ type Style = Pick<Part, "isBold" | "isItalic" | "isStruck">;
 // one line. `marker` is a list item's dash or number, which the Client draws in
 // a column of its own so the item's wrapped lines start under its text.
 // `quote` is how many quotes the line is inside, each drawn as a bar on its left.
+// `isRule` is a line of only ---, *** or ___, drawn as a thin line across.
 export type Row = {
   indent: number;
   quote?: number;
   marker?: string;
+  isRule?: true;
   isHeading?: true;
   isTable?: true;
   isHeader?: true;
@@ -28,6 +30,8 @@ type Segment =
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
 const HEADING = /^#{1,6}\s+/;
 const LIST_MARKER = /^([-*+]|\d+[.)])\s+/;
+// Three or more of the same -, * or _, spaces between them allowed.
+const RULE = /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 // A quote's > at a line's start, and the space after it; "3 > 2" is not one.
 const QUOTE = /^\s*>[ \t]?/;
 // A quote's bar and the gap after it, in cells, and the bar's colour, as the
@@ -270,8 +274,15 @@ export function segments(text: string): Segment[] {
       quote += 1;
     }
 
-    const links: Link[] = [];
     const trimmed = quoted.trimStart();
+
+    // Checked before a list marker, so "* * *" and "- - -" are rules.
+    if (RULE.test(trimmed)) {
+      add({indent: quoted.length - trimmed.length, ...(quote > 0 ? {quote} : {}), isRule: true, parts: []}, []);
+      continue;
+    }
+
+    const links: Link[] = [];
     const isHeading = HEADING.test(trimmed);
     const marker = isHeading ? undefined : LIST_MARKER.exec(trimmed);
     const text = isHeading ? trimmed.replace(HEADING, "") : marker ? trimmed.slice(marker[0].length) : trimmed;
