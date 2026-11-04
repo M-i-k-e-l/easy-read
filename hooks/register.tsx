@@ -8,8 +8,10 @@ type Style = Pick<Part, "isBold" | "isItalic" | "isStruck">;
 // `widths` each column's widest cell, in cells. `parts` holds the same text in
 // one line. `marker` is a list item's dash or number, which the Client draws in
 // a column of its own so the item's wrapped lines start under its text.
+// `quote` is how many quotes the line is inside, each drawn as a bar on its left.
 export type Row = {
   indent: number;
+  quote?: number;
   marker?: string;
   isHeading?: true;
   isTable?: true;
@@ -26,6 +28,14 @@ type Segment =
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
 const HEADING = /^#{1,6}\s+/;
 const LIST_MARKER = /^([-*+]|\d+[.)])\s+/;
+// A quote's > at a line's start, and the space after it; "3 > 2" is not one.
+const QUOTE = /^\s*>[ \t]?/;
+// A quote's bar and the gap after it, in cells, and the bar's colour, as the
+// Client draws them; the cells they take in all.
+const QUOTE_BAR = 0.25;
+const QUOTE_GAP = 1;
+const QUOTE_BAR_COLOR = "#80808033";
+const QUOTE_CELLS = QUOTE_BAR + QUOTE_GAP;
 // A code span first, so what is inside it stays as written, backticks and all.
 // A bare address stops at a quote or an angle bracket, and does not end in the
 // sentence's punctuation: "see https://a.example/docs." links to /docs. A
@@ -53,9 +63,9 @@ const INLINE = new RegExp(
 const CARD_GAP = 2;
 // The gap between a line and a card on its row, and the cells a card on a row
 // keeps free at the right: the width the app gives is wider than the reply's,
-// and in a narrow window a card that just fit by the count wrapped.
+// and a card that just fit by the count wrapped, about 5 cells short at 14.
 const LINE_GAP = 1;
-const LINE_MARGIN = 14;
+const LINE_MARGIN = 20;
 const CARD_MARGIN = 4;
 const DEFAULT_COLUMNS = 80;
 const WEB = /^https?:/;
@@ -251,13 +261,23 @@ export function segments(text: string): Segment[] {
       continue;
     }
 
+    // A quote's >s are cut off and counted; what is left is read as any line.
+    let quoted = line;
+    let quote = 0;
+
+    while (QUOTE.test(quoted)) {
+      quoted = quoted.replace(QUOTE, "");
+      quote += 1;
+    }
+
     const links: Link[] = [];
-    const trimmed = line.trimStart();
+    const trimmed = quoted.trimStart();
     const isHeading = HEADING.test(trimmed);
     const marker = isHeading ? undefined : LIST_MARKER.exec(trimmed);
     const text = isHeading ? trimmed.replace(HEADING, "") : marker ? trimmed.slice(marker[0].length) : trimmed;
     const row: Row = {
-      indent: line.length - trimmed.length,
+      indent: quoted.length - trimmed.length,
+      ...(quote > 0 ? {quote} : {}),
       ...(marker?.[1] !== undefined ? {marker: marker[1]} : {}),
       ...(isHeading ? {isHeading: true} : {}),
       parts: inline(text, (link) => links.push(link)),
@@ -317,9 +337,11 @@ const LETTER_CELLS = 0.8;
 const BOLD_CELLS = 1;
 const HEADING_CELLS = 1.45;
 const WIDE_SCALE = 1.875;
-export function lineWidth({indent, marker, isHeading, parts}: Row) {
-  // A marker, in the line's largest size, and the space after it.
-  let width = indent + (marker === undefined ? 0 : marker.length * lineSize({indent, parts}).cells + LETTER_CELLS);
+export function lineWidth({indent, quote = 0, marker, isHeading, parts}: Row) {
+  // A quote's bars, and a marker, in the line's largest size, and the space
+  // after it.
+  let width =
+    indent + quote * QUOTE_CELLS + (marker === undefined ? 0 : marker.length * lineSize({indent, parts}).cells + LETTER_CELLS);
 
   for (const {text, isBold, mark} of parts) {
     const cells = isHeading ? HEADING_CELLS : isBold ? BOLD_CELLS : LETTER_CELLS;
@@ -361,14 +383,24 @@ export function sameLineLeft(row: Row, names: string[], columns: number) {
 // to: one in the flow moves the lines under it, so the pointer on it was on the
 // next line, and one over the text has no background to hide what is under it.
 // When the names fit after the line, on its row, the card goes there and takes
-// no rows of its own.
-function cards({Box, Link, Markdown, Text}: Table, links: Link[], line: Row, columns: number, hasRoom: boolean, isTable: boolean) {
+// no rows of its own. In a quote, the card's rows have the quote's bars, those
+// of the quotes that go on under them, and the card starts at the quote's text.
+function cards(
+  {Box, Link, Markdown, Text}: Table,
+  links: Link[],
+  line: Row,
+  columns: number,
+  hasRoom: boolean,
+  isTable: boolean,
+  bars: number,
+) {
   const names = links.map(shortName);
   const marks = links.map((_, index) => `${raised(index + 1)} `);
   const shown = names.map((name, index) => `${marks[index]}${name}`);
   // A table's card goes under it, as its rows have no end to put it after.
   const sameLine = isTable ? undefined : sameLineLeft(line, shown, columns);
-  const rows = cardRows(shown, columns - line.indent - CARD_MARGIN);
+  const quote = line.quote ?? 0;
+  const rows = cardRows(shown, columns - line.indent - Math.ceil(quote * QUOTE_CELLS) - CARD_MARGIN);
   const card = (top: number, left: number) => (
     <Box
       position="absolute"
@@ -427,7 +459,19 @@ function cards({Box, Link, Markdown, Text}: Table, links: Link[], line: Row, col
   }
 
   // With a blank line of the Client's under the line, the card starts on it.
-  return <Box height={hasRoom ? rows - 1 : rows}>{card(hasRoom ? -1 : 0, line.indent)}</Box>;
+  // The bars are cells across, not whole ones, so the card is placed in a Box
+  // beside them, not counted from the left.
+  return (
+    <Box height={hasRoom ? rows - 1 : rows} flexDirection="row" columnGap={QUOTE_GAP}>
+      {Array.from({length: Math.min(bars, quote)}, () => (
+        <Box width={QUOTE_BAR} flexShrink={0} backgroundColor={QUOTE_BAR_COLOR} />
+      ))}
+      {Array.from({length: quote - Math.min(bars, quote)}, () => (
+        <Box width={QUOTE_BAR} flexShrink={0} />
+      ))}
+      <Box flexGrow={1}>{card(hasRoom ? -1 : 0, line.indent)}</Box>
+    </Box>
+  );
 }
 
 export const register: Register = (on) => {
@@ -442,7 +486,7 @@ export const register: Register = (on) => {
 
     return (
       <Box flexDirection="column">
-        {segments(e.props.text).map((segment, index) => {
+        {segments(e.props.text).map((segment, index, all) => {
           if (segment.kind === "code") {
             const source = segment.lines.join("\n");
 
@@ -461,10 +505,23 @@ export const register: Register = (on) => {
             return client;
           }
 
+          // The quotes that go on under the card's rows: those the next line is
+          // inside too.
+          const after = all[index + 1];
+          const bars = after?.kind === "text" ? (after.rows[0]?.quote ?? 0) : 0;
+
           return (
             <Box key={`link-${index}`} flexDirection="column">
               {client}
-              {cards(table, segment.links, segment.rows[0] ?? {indent: 0, parts: []}, columns, segment.hasRoom === true, segment.isTable === true)}
+              {cards(
+                table,
+                segment.links,
+                segment.rows[0] ?? {indent: 0, parts: []},
+                columns,
+                segment.hasRoom === true,
+                segment.isTable === true,
+                bars,
+              )}
             </Box>
           );
         })}

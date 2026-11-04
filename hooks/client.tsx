@@ -17,6 +17,11 @@ const CELL_GAP = 0.25;
 // The gap between a list item's marker and its text, about a space of the mono
 // caption text.
 const MARKER_GAP = 0.8;
+// A quote's bar, a quarter of a cell wide, in the header's grey, a cell from the
+// quote's text. The text is in the theme's grey, as the app draws a quote.
+const QUOTE_BAR = 0.25;
+const QUOTE_GAP = 1;
+const QUOTE_COLOR = "inactive";
 
 // A link is underlined, and its number, raised and not underlined, follows it.
 function part({Text}: ClientElements, {text, isBold, isItalic, isStruck, isLink, mark}: Part) {
@@ -65,14 +70,19 @@ function grid(elements: ClientElements, row: Row, cells: Part[][], widths: numbe
 export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSurface) {
   const {Box, Text} = surface.elements;
 
-  const lines = rows.map((row) => {
+  const lines = rows.map((row, index) => {
+    const isLast = index === rows.length - 1;
+
     if (row.cells && row.widths) {
       return grid(surface.elements, row, row.cells, row.widths);
     }
 
     // A blank line is a newline, not a space, so a copy of it holds nothing.
     const children = row.parts.length === 0 ? ["\n"] : row.parts.flatMap((each) => part(surface.elements, each));
-    const props: TextProps = row.isHeading ? {size: "title", weight: "bold"} : {size: "caption"};
+    const props: TextProps = {
+      ...(row.isHeading ? {size: "title", weight: "bold"} : {size: "caption"}),
+      ...(row.quote ? {color: QUOTE_COLOR} : {}),
+    };
 
     const text = h(Text, {mono: true, ...props} as const, ...children);
 
@@ -83,20 +93,41 @@ export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSur
     if (row.marker !== undefined) {
       const markerSize: TextProps = {size: row.parts.some((each) => each.isBold) ? "heading" : "caption"};
 
-      return (
+      return quoted(
+        row,
+        isLast,
         <Box paddingLeft={row.indent} flexDirection="row" columnGap={MARKER_GAP}>
           <Box flexShrink={0}>
-            <Text mono {...markerSize}>
+            <Text mono {...markerSize} {...(row.quote ? {color: QUOTE_COLOR} : {})}>
               {row.marker}
             </Text>
           </Box>
           <Box flexShrink={1}>{text}</Box>
-        </Box>
+        </Box>,
       );
     }
 
-    return <Box paddingLeft={row.indent}>{text}</Box>;
+    return quoted(row, isLast, <Box paddingLeft={row.indent}>{text}</Box>);
   });
 
-  return h(Box, {flexDirection: "column"}, ...lines);
+  // A quoted line behind a bar for each quote it is inside. The bars of a
+  // quote's lines meet, as the lines have no gap between them. The app gives a
+  // Client a little more height than its lines take, so the last line grows
+  // into it, and its bars with it, to meet the bars of the run under it.
+  function quoted(row: Row, isLast: boolean, line: ReturnType<typeof Box>) {
+    if (!row.quote) {
+      return line;
+    }
+
+    const bars = Array.from({length: row.quote}, () => <Box width={QUOTE_BAR} flexShrink={0} backgroundColor={HEADER_BACKGROUND} />);
+
+    return h(
+      Box,
+      {flexDirection: "row", columnGap: QUOTE_GAP, ...(isLast ? {flexGrow: 1} : {})},
+      ...bars,
+      <Box flexShrink={1}>{line}</Box>,
+    );
+  }
+
+  return h(Box, {flexDirection: "column", flexGrow: 1, height: "100%"}, ...lines);
 }

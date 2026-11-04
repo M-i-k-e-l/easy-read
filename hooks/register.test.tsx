@@ -172,6 +172,18 @@ test("a list item's dash or number is cut from its text, and bold or italic at i
   expect(lineWidth({indent: 0, marker: "-", parts: [{text: "abcde"}]})).toBe(6);
 });
 
+test("a quote's >s are cut off and counted, and what is left is read as any line", () => {
+  expect(textRows("> a\n>\n> - b\n> > c\n3 > 2")).toMatchObject([
+    {quote: 1, parts: [{text: "a"}]},
+    {quote: 1, parts: []},
+    {quote: 1, marker: "-", parts: [{text: "b"}]},
+    {quote: 2, parts: [{text: "c"}]},
+    {parts: [{text: "3 > 2"}]},
+  ]);
+  expect(textRows("3 > 2")[0]).not.toHaveProperty("quote");
+  expect(lineWidth({indent: 0, quote: 2, parts: [{text: "abcde"}]})).toBe(7);
+});
+
 test("a link line with no blank line under it still is a run of its own", () => {
   const result = segments("[a](https://a.example)\nnext");
 
@@ -258,9 +270,9 @@ test("a line's width is measured: bold and headings wider, wide letters wider st
 test("a card goes on its line when its names fit after it, else under it", () => {
   const row = {indent: 0, parts: [{text: "0123456789"}]};
 
-  // 8 cells of line, a gap of 1, names of 3 and 4 letters (5.6 cells) with a gap of 2, a margin of 14.
-  expect(sameLineLeft(row, ["abc", "defg"], 31)).toBe(9);
-  expect(sameLineLeft(row, ["abc", "defg"], 30)).toBeUndefined();
+  // 8 cells of line, a gap of 1, names of 3 and 4 letters (5.6 cells) with a gap of 2, a margin of 20.
+  expect(sameLineLeft(row, ["abc", "defg"], 37)).toBe(9);
+  expect(sameLineLeft(row, ["abc", "defg"], 36)).toBeUndefined();
 });
 
 test("a card on its line takes the line's largest size", () => {
