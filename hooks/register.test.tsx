@@ -1,6 +1,6 @@
 import {expect, test} from "claude-code/testing";
 
-import {cardRows, inline, segments, shortName} from "./register";
+import {cardRows, inline, raised, segments, shortName} from "./register";
 
 const REPLY = [
   "# Title",
@@ -40,7 +40,7 @@ test("a link inside bold is bold, and is handed on for its card", () => {
 
   expect(inline("**see [x](https://a.example)**", (link) => links.push(link))).toEqual([
     {text: "see ", isBold: true},
-    {text: "x", isBold: true, isLink: true},
+    {text: "x", isBold: true, isLink: true, mark: "¹"},
   ]);
   expect(links).toEqual([{label: "x", url: "https://a.example"}]);
 });
@@ -117,8 +117,14 @@ test("the desktop draws text in mono caption, bold as heading, code as Code, and
   expect(bold?.props.size).toBe("heading");
   expect(bold?.props.weight).toBe("bold");
   expect(link?.props.underline).toBe(true);
-  expect(card?.text).toBe("[the docs](https://example.com/docs)");
+  expect(card?.text).toBe("¹ [the docs](https://example.com/docs)");
+  expect(await ui.find({type: "Text", text: /^¹$/, in: "text-1"})).toBeDefined();
   expect(code?.props.source).toBe("const a = **b**;");
   expect(await ui.find({type: "Text", text: /engine/})).toBeUndefined();
   await ui.unmount();
+});
+
+test("a link's number is raised", () => {
+  expect(raised(1)).toBe("¹");
+  expect(raised(10)).toBe("¹⁰");
 });

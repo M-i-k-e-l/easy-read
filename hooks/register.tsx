@@ -1,7 +1,8 @@
 import type {Elements, Register} from "claude-code";
 
 type Table = Elements["desktop"];
-export type Part = {text: string; isBold?: true; isLink?: true};
+// `mark` is a link's number, raised, the same as on its card.
+export type Part = {text: string; isBold?: true; isLink?: true; mark?: string};
 export type Row = {indent: number; isHeading?: true; parts: Part[]};
 type Link = {label: string; url: string};
 type Segment =
@@ -17,12 +18,21 @@ const INLINE = /(`[^`]*`)|\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:[^)\s]+)\)|(https?
 const CARD_GAP = 2;
 const CARD_MARGIN = 4;
 const DEFAULT_COLUMNS = 80;
+const RAISED = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+// A number in raised digits: 12 is ¹².
+export function raised(number: number) {
+  return [...String(number)].map((digit) => RAISED[Number(digit)]).join("");
+}
 
 // Cuts one line into what the Client draws: plain text, bold, and links, each
-// link also handed to `addLink` for the card under its line.
-export function inline(text: string, addLink: (link: Link) => void, isBold = false): Part[] {
+// link also handed to `addLink` for the card under its line, which gives back
+// its number on the card.
+export function inline(text: string, addLink: (link: Link) => number | void, isBold = false): Part[] {
   const parts: Part[] = [];
   const push = (part: Part) => part.text !== "" && parts.push(isBold ? {...part, isBold: true} : part);
+  const pushLink = (text: string, number: number | void) =>
+    push({text, isLink: true, ...(typeof number === "number" ? {mark: raised(number)} : {})});
   let last = 0;
 
   for (const match of text.matchAll(INLINE)) {
@@ -36,11 +46,9 @@ export function inline(text: string, addLink: (link: Link) => void, isBold = fal
     } else if (bold !== undefined) {
       parts.push(...inline(bold, addLink, true));
     } else if (label !== undefined && url !== undefined) {
-      addLink({label, url});
-      push({text: label, isLink: true});
+      pushLink(label, addLink({label, url}));
     } else if (bare !== undefined) {
-      addLink({label: bare, url: bare});
-      push({text: bare, isLink: true});
+      pushLink(bare, addLink({label: bare, url: bare}));
     }
   }
 
@@ -140,7 +148,7 @@ export function cardRows(names: string[], width: number) {
   return rows;
 }
 
-// A line's card: the app's own links, which can be clicked and copied, hidden
+// A line's card: each link's number, raised as in the line, then the app's own links, which can be clicked and copied, hidden
 // until the pointer is on the line. The hover sits on the hook's keyed Box
 // around the line, as a hover inside the Client does not reach the card. The
 // card is absolute, in blank rows of the line's own, as many as its names wrap
@@ -148,7 +156,11 @@ export function cardRows(names: string[], width: number) {
 // next line, and one over the text has no background to hide what is under it.
 function cards({Box, Markdown}: Table, links: Link[], indent: number, columns: number, hasRoom: boolean) {
   const names = links.map(shortName);
-  const rows = cardRows(names, columns - indent - CARD_MARGIN);
+  const marks = links.map((_, index) => `${raised(index + 1)} `);
+  const rows = cardRows(
+    names.map((name, index) => `${marks[index]}${name}`),
+    columns - indent - CARD_MARGIN,
+  );
 
   // With a blank line of the Client's under the line, the card starts on it.
   return (
@@ -164,7 +176,7 @@ function cards({Box, Markdown}: Table, links: Link[], indent: number, columns: n
         hover={{display: "flex"}}
       >
         {links.map((link, index) => (
-          <Markdown text={`[${names[index]?.replace(/[[\]]/g, "\\$&")}](${link.url})`} />
+          <Markdown text={`${marks[index]}[${names[index]?.replace(/[[\]]/g, "\\$&")}](${link.url})`} />
         ))}
       </Box>
     </Box>
