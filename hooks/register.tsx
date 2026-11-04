@@ -3,10 +3,21 @@ import type {Elements, Register, TextProps} from "claude-code";
 type Table = Elements["desktop"];
 // `mark` is a link's number, raised, the same as on its card.
 export type Part = {text: string; isBold?: true; isLink?: true; mark?: string};
-export type Row = {indent: number; isHeading?: true; parts: Part[]};
+// A table's row, which the Client draws as a grid: `cells` are its columns and
+// `widths` each column's widest cell, in cells. `parts` holds the same text in
+// one line.
+export type Row = {
+  indent: number;
+  isHeading?: true;
+  isTable?: true;
+  isHeader?: true;
+  cells?: Part[][];
+  widths?: number[];
+  parts: Part[];
+};
 type Link = {label: string; url: string};
 type Segment =
-  | {kind: "text"; rows: Row[]; links: Link[]; hasRoom?: true}
+  | {kind: "text"; rows: Row[]; links: Link[]; hasRoom?: true; isTable?: true}
   | {kind: "code"; language: string; lines: string[]};
 
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
@@ -26,7 +37,11 @@ const LINE_GAP = 1;
 const LINE_MARGIN = 14;
 const CARD_MARGIN = 4;
 const DEFAULT_COLUMNS = 80;
-const WEB = /^https?:/;const RAISED = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+const WEB = /^https?:/;
+const RAISED = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+// A table's line under its header: pipes, dashes, and colons for alignment.
+const SEPARATOR = /^\s*\|?(\s*:?-+:?\s*\|)*\s*:?-+:?\s*\|?\s*$/;
+const CELL_GAP = " │ ";
 
 // A number in raised digits: 12 is ¹².
 export function raised(number: number) {
@@ -65,16 +80,97 @@ export function inline(text: string, addLink: (link: Link) => number | void, isB
   return parts;
 }
 
+// A table as a grid of cells, each column as wide as its widest cell until the
+// window is narrower, the header on a stronger background. Its links are
+// numbered through the table, as the table has one card, under it.
+export function tableRows(lines: string[], addLink: (link: Link) => number | void): Row[] {
+  const first = lines[0] ?? "";
+  const indent = first.length - first.trimStart().length;
+  const hasHeader = lines.length > 1 && SEPARATOR.test(lines[1] ?? "");
+  const cut = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+  const table = lines
+    .filter((_, index) => !(hasHeader && index === 1))
+    .map((line, index) => {
+      const cells = cut(line).map((cell) => {
+        const parts = inline(cell.trim(), addLink);
+        // In cells, as bold is drawn larger.
+        const width = parts.reduce(
+          (sum, part) => sum + [...part.text + (part.mark ?? "")].length * (part.isBold ? BOLD_CELLS : LETTER_CELLS),
+          0,
+        );
+
+        return {parts, width};
+      });
+
+      return {cells};
+    });
+  const widths: number[] = [];
+
+  for (const {cells} of table) {
+    cells.forEach(({width}, column) => (widths[column] = Math.max(widths[column] ?? 0, width)));
+  }
+
+  return table.map(({cells}, index) => {
+    const parts: Part[] = [];
+
+    widths.forEach((_, column) => {
+      const cell = cells[column] ?? {parts: [], width: 0};
+
+      if (column > 0) {
+        parts.push({text: CELL_GAP});
+      }
+
+      parts.push(...cell.parts);
+    });
+
+    return {
+      indent,
+      isTable: true,
+      ...(hasHeader && index === 0 ? {isHeader: true} : {}),
+      cells: widths.map((_, column) => cells[column]?.parts ?? []),
+      widths,
+      parts,
+    };
+  });
+}
+
 // Splits a reply into code fences, which the app draws, and runs of text for the
 // Client. A line with a link is a run of its own, so its cards sit right under it.
 export function segments(text: string): Segment[] {
   const result: Segment[] = [];
   let code: string[] | undefined;
+  let table: string[] | undefined;
+  const add = (row: Row, links: Link[]) => {
+    const last = result.at(-1);
+
+    if (links.length === 0 && last?.kind === "text" && last.links.length === 0) {
+      last.rows.push(row);
+    } else {
+      result.push({kind: "text", rows: [row], links});
+    }
+  };
+  // A table with links is a run of its own, so its card sits right under it.
+  const endTable = () => {
+    if (table) {
+      const links: Link[] = [];
+      const rows = tableRows(table, (link) => links.push(link));
+
+      if (links.length === 0) {
+        rows.forEach((row) => add(row, []));
+      } else {
+        result.push({kind: "text", rows, links, isTable: true});
+      }
+    }
+
+    table = undefined;
+  };
 
   for (const line of text.split("\n")) {
     const fence = FENCE.exec(line);
 
     if (fence) {
+      endTable();
+
       if (code) {
         code = undefined;
       } else {
@@ -89,6 +185,14 @@ export function segments(text: string): Segment[] {
       code.push(line);
       continue;
     }
+
+    // A table's lines are gathered, then drawn as rows when it ends.
+    if (line.trimStart().startsWith("|")) {
+      (table ??= []).push(line);
+      continue;
+    }
+
+    endTable();
 
     const last = result.at(-1);
 
@@ -109,12 +213,10 @@ export function segments(text: string): Segment[] {
       parts: inline(isHeading ? trimmed.replace(HEADING, "") : trimmed, (link) => links.push(link)),
     };
 
-    if (links.length === 0 && last?.kind === "text" && last.links.length === 0) {
-      last.rows.push(row);
-    } else {
-      result.push({kind: "text", rows: [row], links});
-    }
+    add(row, links);
   }
+
+  endTable();
 
   return result;
 }
@@ -209,11 +311,12 @@ export function sameLineLeft(row: Row, names: string[], columns: number) {
 // next line, and one over the text has no background to hide what is under it.
 // When the names fit after the line, on its row, the card goes there and takes
 // no rows of its own.
-function cards({Box, Link, Markdown, Text}: Table, links: Link[], line: Row, columns: number, hasRoom: boolean) {
+function cards({Box, Link, Markdown, Text}: Table, links: Link[], line: Row, columns: number, hasRoom: boolean, isTable: boolean) {
   const names = links.map(shortName);
   const marks = links.map((_, index) => `${raised(index + 1)} `);
   const shown = names.map((name, index) => `${marks[index]}${name}`);
-  const sameLine = sameLineLeft(line, shown, columns);
+  // A table's card goes under it, as its rows have no end to put it after.
+  const sameLine = isTable ? undefined : sameLineLeft(line, shown, columns);
   const rows = cardRows(shown, columns - line.indent - CARD_MARGIN);
   const card = (top: number, left: number) => (
     <Box
@@ -310,7 +413,7 @@ export const register: Register = (on) => {
           return (
             <Box key={`link-${index}`} flexDirection="column">
               {client}
-              {cards(table, segment.links, segment.rows[0] ?? {indent: 0, parts: []}, columns, segment.hasRoom === true)}
+              {cards(table, segment.links, segment.rows[0] ?? {indent: 0, parts: []}, columns, segment.hasRoom === true, segment.isTable === true)}
             </Box>
           );
         })}

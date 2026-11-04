@@ -1,6 +1,6 @@
 import {expect, test} from "claude-code/testing";
 
-import {cardRows, inline, lineSize, lineWidth, raised, sameLineLeft, segments, shortName} from "./register";
+import {cardRows, inline, lineSize, lineWidth, raised, sameLineLeft, segments, shortName, tableRows} from "./register";
 
 const REPLY = [
   "# Title",
@@ -65,6 +65,35 @@ test("a link to a file is a link, its card named by its label", () => {
     {text: "register.tsx", isLink: true, mark: "¹"},
   ]);
   expect(links).toEqual([{label: "register.tsx", url: "hooks/register.tsx:42"}]);
+});
+
+test("a table is a grid of cells, its header marked", () => {
+  const rows = tableRows(["| a | bb |", "|---|:-:|", "| **ccc** | d |"], () => {});
+
+  expect(rows.length).toBe(2);
+  expect(rows.every((row) => row.isTable)).toBe(true);
+  expect(rows[0]?.isHeader).toBe(true);
+  expect(rows[1]).not.toHaveProperty("isHeader");
+  // In cells: a letter 0.8, a bold one 1.
+  expect(rows[0]?.widths).toEqual([3, 1.6]);
+  expect(rows[0]?.cells).toEqual([[{text: "a"}], [{text: "bb"}]]);
+  expect(rows[1]?.cells).toEqual([[{text: "ccc", isBold: true}], [{text: "d"}]]);
+});
+
+test("a table with links is one run, its links numbered through it", () => {
+  const result = segments(
+    ["Before.", "| a | b |", "|---|---|", "| [x](hooks/a.ts) | c |", "| d | [y](https://a.example) |", "After."].join("\n"),
+  );
+
+  expect(result).toMatchObject([
+    {rows: [{parts: [{text: "Before."}]}], links: []},
+    {
+      rows: [{isHeader: true}, {cells: [[{text: "x", mark: "¹"}], [{text: "c"}]]}, {cells: [[{text: "d"}], [{text: "y", mark: "²"}]]}],
+      links: [{url: "hooks/a.ts"}, {url: "https://a.example"}],
+      isTable: true,
+    },
+    {rows: [{parts: [{text: "After."}]}], links: []},
+  ]);
 });
 
 test("a reply splits into text, a link line taking the blank line under it, code and text", () => {
