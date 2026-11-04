@@ -12,7 +12,9 @@ type Segment =
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
 const HEADING = /^#{1,6}\s+/;
 // A code span first, so what is inside it stays as written, backticks and all.
-const INLINE = /(`[^`]*`)|\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:[^)\s]+)\)|(https?:\/\/[^\s)`]+)/g;
+// A bare address stops at a quote or an angle bracket, and does not end in the
+// sentence's punctuation: "see https://a.example/docs." links to /docs.
+const INLINE = /(`[^`]*`)|\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:[^)\s]+)\)|(https?:\/\/[^\s)`"<>]*[^\s)`"<>.,;:!?'])/g;
 // The gap between two names on a card, the cells kept free at its right end as
 // the letters are only about a cell wide, and the width when the app gives none.
 const CARD_GAP = 2;

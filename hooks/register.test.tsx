@@ -45,6 +45,18 @@ test("a link inside bold is bold, and is handed on for its card", () => {
   expect(links).toEqual([{label: "x", url: "https://a.example"}]);
 });
 
+test("a bare address leaves out a quote and the sentence's punctuation after it", () => {
+  const links: unknown[] = [];
+
+  expect(inline('In "see https://a.example/docs." and https://a.example/x?y=1, too', (link) => links.push(link))).toEqual([
+    {text: 'In "see '},
+    {text: "https://a.example/docs", isLink: true, mark: "¹"},
+    {text: '." and '},
+    {text: "https://a.example/x?y=1", isLink: true, mark: "²"},
+    {text: ", too"},
+  ]);
+});
+
 test("a reply splits into text, a link line taking the blank line under it, code and text", () => {
   const result = segments(REPLY);
 
