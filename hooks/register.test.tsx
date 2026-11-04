@@ -57,6 +57,16 @@ test("a bare address leaves out a quote and the sentence's punctuation after it"
   ]);
 });
 
+test("a link to a file is a link, its card named by its label", () => {
+  const links: unknown[] = [];
+
+  expect(inline("see [register.tsx](hooks/register.tsx:42)", (link) => links.push(link))).toEqual([
+    {text: "see "},
+    {text: "register.tsx", isLink: true, mark: "¹"},
+  ]);
+  expect(links).toEqual([{label: "register.tsx", url: "hooks/register.tsx:42"}]);
+});
+
 test("a reply splits into text, a link line taking the blank line under it, code and text", () => {
   const result = segments(REPLY);
 

@@ -13,8 +13,9 @@ const FENCE = /^\s*(```|~~~)\s*(\S*)/;
 const HEADING = /^#{1,6}\s+/;
 // A code span first, so what is inside it stays as written, backticks and all.
 // A bare address stops at a quote or an angle bracket, and does not end in the
-// sentence's punctuation: "see https://a.example/docs." links to /docs.
-const INLINE = /(`[^`]*`)|\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:[^)\s]+)\)|(https?:\/\/[^\s)`"<>]*[^\s)`"<>.,;:!?'])/g;
+// sentence's punctuation: "see https://a.example/docs." links to /docs. A
+// written link may go anywhere, a file as well: [x](hooks/register.tsx:42).
+const INLINE = /(`[^`]*`)|\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s)`"<>]*[^\s)`"<>.,;:!?'])/g;
 // The gap between two names on a card, the cells kept free at its right end as
 // the letters are only about a cell wide, and the width when the app gives none.
 const CARD_GAP = 2;
@@ -25,7 +26,7 @@ const LINE_GAP = 1;
 const LINE_MARGIN = 14;
 const CARD_MARGIN = 4;
 const DEFAULT_COLUMNS = 80;
-const RAISED = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+const WEB = /^https?:/;const RAISED = "⁰¹²³⁴⁵⁶⁷⁸⁹";
 
 // A number in raised digits: 12 is ¹².
 export function raised(number: number) {
@@ -248,14 +249,25 @@ function cards({Box, Link, Markdown, Text}: Table, links: Link[], line: Row, col
         columnGap={CARD_GAP}
         hover={{display: "flex"}}
       >
-        {links.map((link, index) => (
-          <Text mono size={size}>
-            {marks[index]}
-            <Link href={link.url}>
-              <Text underline>{names[index]}</Text>
-            </Link>
-          </Text>
-        ))}
+        {links.map((link, index) =>
+          // The app's Link opens only a web address here; a file's goes to its
+          // Markdown, written as a reply writes it.
+          WEB.test(link.url) ? (
+            <Text mono size={size}>
+              {marks[index]}
+              <Link href={link.url}>
+                <Text underline>{names[index]}</Text>
+              </Link>
+            </Text>
+          ) : (
+            <Box>
+              <Text mono size={size}>
+                {marks[index]}
+              </Text>
+              <Markdown text={`[${names[index]?.replace(/[[\]]/g, "\\$&")}](${link.url})`} />
+            </Box>
+          ),
+        )}
       </Box>
     );
   }
