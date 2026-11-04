@@ -172,6 +172,14 @@ test("a list item's dash or number is cut from its text, and bold or italic at i
   expect(lineWidth({indent: 0, marker: "-", parts: [{text: "abcde"}]})).toBe(6);
 });
 
+test("a dot item's level is how many dot items it is under, so one under a number starts over, and a line that is not an item ends the list", () => {
+  const levels = (text: string) => textRows(text).map((row) => row.level ?? 0);
+
+  expect(levels("- a\n  - b\n    - c\n  - d\n- e\n   1. f\ng\n  - h")).toEqual([0, 1, 2, 1, 0, 1, 0, 0]);
+  expect(levels("- a\n\n  - b\n> - c\n>   - d")).toEqual([0, 0, 1, 0, 1]);
+  expect(levels("1. a\n   - b\n     - c\n- d\n  1. e\n     - f")).toEqual([0, 0, 1, 0, 1, 1]);
+});
+
 test("a quote's >s are cut off and counted, and what is left is read as any line", () => {
   expect(textRows("> a\n>\n> - b\n> > c\n3 > 2")).toMatchObject([
     {quote: 1, parts: [{text: "a"}]},

@@ -17,6 +17,11 @@ const CELL_GAP = 0.25;
 // The gap between a list item's marker and its text, about a space of the mono
 // caption text.
 const MARKER_GAP = 0.8;
+// A list item's -, * or + is drawn as a dot, as the app draws it, a hollow
+// one a level deeper and a square deeper still, then over again; a number as
+// written.
+const BULLET_MARKER = /^[-*+]$/;
+const BULLETS = ["•", "◦", "▪"];
 // A quote's bar, a quarter of a cell wide, in the header's grey, a cell from the
 // quote's text. The text is in the theme's grey, as the app draws a quote.
 const QUOTE_BAR = 0.25;
@@ -111,7 +116,7 @@ export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSur
         <Box paddingLeft={row.indent} flexDirection="row" columnGap={MARKER_GAP}>
           <Box flexShrink={0}>
             <Text mono {...markerSize} {...(row.quote ? {color: QUOTE_COLOR} : {})}>
-              {row.marker}
+              {BULLET_MARKER.test(row.marker) ? BULLETS[(row.level ?? 0) % BULLETS.length] : row.marker}
             </Text>
           </Box>
           <Box flexShrink={1}>{text}</Box>

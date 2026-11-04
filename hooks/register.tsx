@@ -9,11 +9,14 @@ type Style = Pick<Part, "isBold" | "isItalic" | "isStruck">;
 // one line. `marker` is a list item's dash or number, which the Client draws in
 // a column of its own so the item's wrapped lines start under its text.
 // `quote` is how many quotes the line is inside, each drawn as a bar on its left.
+// `level` is how many dot items a dot item is nested under, counted from 0, so
+// a dot list under a number starts over, as the app draws it.
 // `isRule` is a line of only ---, *** or ___, drawn as a thin line across.
 export type Row = {
   indent: number;
   quote?: number;
   marker?: string;
+  level?: number;
   isRule?: true;
   isHeading?: true;
   isTable?: true;
@@ -30,6 +33,7 @@ type Segment =
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
 const HEADING = /^#{1,6}\s+/;
 const LIST_MARKER = /^([-*+]|\d+[.)])\s+/;
+const DOT_MARKER = /^[-*+]$/;
 // Three or more of the same -, * or _, spaces between them allowed.
 const RULE = /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 // A quote's > at a line's start, and the space after it; "3 > 2" is not one.
@@ -199,6 +203,10 @@ export function segments(text: string): Segment[] {
   const result: Segment[] = [];
   let code: string[] | undefined;
   let table: string[] | undefined;
+  // The list items above that are still open, outermost first, by indent and
+  // whether each is a dot item, and the quote they are in.
+  let listIndents: {indent: number; isDot: boolean}[] = [];
+  let listQuote = 0;
   const add = (row: Row, links: Link[]) => {
     const last = result.at(-1);
 
@@ -286,10 +294,29 @@ export function segments(text: string): Segment[] {
     const isHeading = HEADING.test(trimmed);
     const marker = isHeading ? undefined : LIST_MARKER.exec(trimmed);
     const text = isHeading ? trimmed.replace(HEADING, "") : marker ? trimmed.slice(marker[0].length) : trimmed;
+    const indent = quoted.length - trimmed.length;
+
+    // A list ends at a line that is not an item and not indented, or in
+    // another quote. An item deeper than the one above it is a level deeper.
+    if (quote !== listQuote || (!marker && trimmed !== "" && indent === 0)) {
+      listIndents = [];
+      listQuote = quote;
+    }
+
+    if (marker) {
+      while (listIndents.length > 0 && listIndents.at(-1)!.indent >= indent) {
+        listIndents.pop();
+      }
+
+      listIndents.push({indent, isDot: DOT_MARKER.test(marker[1] ?? "")});
+    }
+
+    const level = listIndents.slice(0, -1).filter((each) => each.isDot).length;
     const row: Row = {
-      indent: quoted.length - trimmed.length,
+      indent,
       ...(quote > 0 ? {quote} : {}),
       ...(marker?.[1] !== undefined ? {marker: marker[1]} : {}),
+      ...(marker && level > 0 ? {level} : {}),
       ...(isHeading ? {isHeading: true} : {}),
       parts: inline(text, (link) => links.push(link)),
     };
