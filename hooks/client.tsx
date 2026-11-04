@@ -14,6 +14,9 @@ const BORDER = "single";
 // The gap between cells, a quarter of a cell, about 5px: a whole cell is too
 // wide, and a size in px is ignored.
 const CELL_GAP = 0.25;
+// The gap between a list item's marker and its text, about a space of the mono
+// caption text.
+const MARKER_GAP = 0.8;
 
 // A link is underlined, and its number, raised and not underlined, follows it.
 function part({Text}: ClientElements, {text, isBold, isItalic, isStruck, isLink, mark}: Part) {
@@ -69,9 +72,30 @@ export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSur
 
     // A blank line is a newline, not a space, so a copy of it holds nothing.
     const children = row.parts.length === 0 ? ["\n"] : row.parts.flatMap((each) => part(surface.elements, each));
-    const props = row.isHeading ? {size: "title", weight: "bold"} : {size: "caption"};
+    const props: TextProps = row.isHeading ? {size: "title", weight: "bold"} : {size: "caption"};
 
-    return <Box paddingLeft={row.indent}>{h(Text, {mono: true, ...props} as const, ...children)}</Box>;
+    const text = h(Text, {mono: true, ...props} as const, ...children);
+
+    // A list item's marker in a column of its own that does not shrink, so its
+    // wrapped lines start under its text and "10." stays on one line. It is in
+    // the line's largest size, as a line with bold is taller and a smaller
+    // marker would sit above the middle of its first line.
+    if (row.marker !== undefined) {
+      const markerSize: TextProps = {size: row.parts.some((each) => each.isBold) ? "heading" : "caption"};
+
+      return (
+        <Box paddingLeft={row.indent} flexDirection="row" columnGap={MARKER_GAP}>
+          <Box flexShrink={0}>
+            <Text mono {...markerSize}>
+              {row.marker}
+            </Text>
+          </Box>
+          <Box flexShrink={1}>{text}</Box>
+        </Box>
+      );
+    }
+
+    return <Box paddingLeft={row.indent}>{text}</Box>;
   });
 
   return h(Box, {flexDirection: "column"}, ...lines);

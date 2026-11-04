@@ -6,9 +6,11 @@ export type Part = {text: string; isBold?: true; isItalic?: true; isStruck?: tru
 type Style = Pick<Part, "isBold" | "isItalic" | "isStruck">;
 // A table's row, which the Client draws as a grid: `cells` are its columns and
 // `widths` each column's widest cell, in cells. `parts` holds the same text in
-// one line.
+// one line. `marker` is a list item's dash or number, which the Client draws in
+// a column of its own so the item's wrapped lines start under its text.
 export type Row = {
   indent: number;
+  marker?: string;
   isHeading?: true;
   isTable?: true;
   isHeader?: true;
@@ -23,6 +25,7 @@ type Segment =
 
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
 const HEADING = /^#{1,6}\s+/;
+const LIST_MARKER = /^([-*+]|\d+[.)])\s+/;
 // A code span first, so what is inside it stays as written, backticks and all.
 // A bare address stops at a quote or an angle bracket, and does not end in the
 // sentence's punctuation: "see https://a.example/docs." links to /docs. A
@@ -251,10 +254,13 @@ export function segments(text: string): Segment[] {
     const links: Link[] = [];
     const trimmed = line.trimStart();
     const isHeading = HEADING.test(trimmed);
+    const marker = isHeading ? undefined : LIST_MARKER.exec(trimmed);
+    const text = isHeading ? trimmed.replace(HEADING, "") : marker ? trimmed.slice(marker[0].length) : trimmed;
     const row: Row = {
       indent: line.length - trimmed.length,
+      ...(marker?.[1] !== undefined ? {marker: marker[1]} : {}),
       ...(isHeading ? {isHeading: true} : {}),
-      parts: inline(isHeading ? trimmed.replace(HEADING, "") : trimmed, (link) => links.push(link)),
+      parts: inline(text, (link) => links.push(link)),
     };
 
     add(row, links);
@@ -311,8 +317,9 @@ const LETTER_CELLS = 0.8;
 const BOLD_CELLS = 1;
 const HEADING_CELLS = 1.45;
 const WIDE_SCALE = 1.875;
-export function lineWidth({indent, isHeading, parts}: Row) {
-  let width = indent;
+export function lineWidth({indent, marker, isHeading, parts}: Row) {
+  // A marker, in the line's largest size, and the space after it.
+  let width = indent + (marker === undefined ? 0 : marker.length * lineSize({indent, parts}).cells + LETTER_CELLS);
 
   for (const {text, isBold, mark} of parts) {
     const cells = isHeading ? HEADING_CELLS : isBold ? BOLD_CELLS : LETTER_CELLS;

@@ -24,6 +24,7 @@ const message = (text: string, surface: "desktop" | "terminal", isSummary = fals
   }) as const;
 
 const noLinks = () => {};
+const textRows = (text: string) => segments(text).flatMap((segment) => (segment.kind === "text" ? segment.rows : []));
 
 test("bold is cut out, and a code span keeps its backticks and its stars", () => {
   expect(inline("a **b** `**c**` d", noLinks)).toEqual([
@@ -150,6 +151,25 @@ test("a reply splits into text, a link line taking the blank line under it, code
     hasRoom: true,
   });
   expect(result[2]).toEqual({kind: "code", language: "ts", lines: ["const a = **b**;"]});
+});
+
+test("a list item's dash or number is cut from its text, and bold or italic at its start is not a marker", () => {
+  expect(segments("- a\n  * b\n12. c\n3) d\n**e** f\n*g*")).toMatchObject([
+    {
+      rows: [
+        {indent: 0, marker: "-", parts: [{text: "a"}]},
+        {indent: 2, marker: "*", parts: [{text: "b"}]},
+        {marker: "12.", parts: [{text: "c"}]},
+        {marker: "3)", parts: [{text: "d"}]},
+        {parts: [{text: "e", isBold: true}, {text: " f"}]},
+        {parts: [{text: "g", isItalic: true}]},
+      ],
+    },
+  ]);
+  for (const row of textRows("**e** f\n*g*")) {
+    expect(row).not.toHaveProperty("marker");
+  }
+  expect(lineWidth({indent: 0, marker: "-", parts: [{text: "abcde"}]})).toBe(6);
 });
 
 test("a link line with no blank line under it still is a run of its own", () => {
