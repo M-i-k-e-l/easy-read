@@ -1,4 +1,4 @@
-import type {Elements, Register} from "claude-code";
+import type {Elements, Register, TextProps} from "claude-code";
 
 type Table = Elements["desktop"];
 // `mark` is a link's number, raised, the same as on its card.
@@ -16,6 +16,11 @@ const INLINE = /(`[^`]*`)|\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:[^)\s]+)\)|(https?
 // The gap between two names on a card, the cells kept free at its right end as
 // the letters are only about a cell wide, and the width when the app gives none.
 const CARD_GAP = 2;
+// The gap between a line and a card on its row, and the cells a card on a row
+// keeps free at the right: the width the app gives is wider than the reply's,
+// and in a narrow window a card that just fit by the count wrapped.
+const LINE_GAP = 1;
+const LINE_MARGIN = 14;
 const CARD_MARGIN = 4;
 const DEFAULT_COLUMNS = 80;
 const RAISED = "⁰¹²³⁴⁵⁶⁷⁸⁹";
@@ -148,39 +153,113 @@ export function cardRows(names: string[], width: number) {
   return rows;
 }
 
+// How many cells a line takes, measured on the desktop app and rounded up a
+// little so a card placed after it does not overlap it: a reply's letter is
+// about 0.75 of a cell, a bold one about 0.95, and a wide one (Chinese, an
+// emoji) about 1.4, and a heading's about 1.4.
+const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]|\p{Extended_Pictographic}/u;
+const LETTER_CELLS = 0.8;
+const BOLD_CELLS = 1;
+const HEADING_CELLS = 1.45;
+const WIDE_SCALE = 1.875;
+export function lineWidth({indent, isHeading, parts}: Row) {
+  let width = indent;
+
+  for (const {text, isBold, mark} of parts) {
+    const cells = isHeading ? HEADING_CELLS : isBold ? BOLD_CELLS : LETTER_CELLS;
+
+    for (const letter of text + (mark ?? "")) {
+      width += (WIDE.test(letter) ? WIDE_SCALE : 1) * cells;
+    }
+  }
+
+  // Less a hair, as 1.3 added ten times is a little over 13.
+  return Math.ceil(width - 1e-9);
+}
+
+// The largest size on a line, as its row is as tall as its largest letters: a
+// card on the row in that size is as tall as the line, so their middles meet.
+export function lineSize({isHeading, parts}: Row): {size: NonNullable<TextProps["size"]>; cells: number} {
+  if (isHeading) {
+    return {size: "title", cells: HEADING_CELLS};
+  }
+
+  return parts.some((part) => part.isBold) ? {size: "heading", cells: BOLD_CELLS} : {size: "caption", cells: LETTER_CELLS};
+}
+
+// Where a card goes on its line's own row: the cell after the line and a gap,
+// when its names, in the line's largest size, fit there in one row; otherwise
+// undefined, and it goes under.
+export function sameLineLeft(row: Row, names: string[], columns: number) {
+  const left = lineWidth(row) + LINE_GAP;
+  const {cells} = lineSize(row);
+  const width = names.reduce((sum, name) => sum + name.length * cells, 0) + CARD_GAP * (names.length - 1);
+
+  return left + width + LINE_MARGIN <= columns ? left : undefined;
+}
+
 // A line's card: each link's number, raised as in the line, then the app's own links, which can be clicked and copied, hidden
 // until the pointer is on the line. The hover sits on the hook's keyed Box
 // around the line, as a hover inside the Client does not reach the card. The
 // card is absolute, in blank rows of the line's own, as many as its names wrap
 // to: one in the flow moves the lines under it, so the pointer on it was on the
 // next line, and one over the text has no background to hide what is under it.
-function cards({Box, Markdown}: Table, links: Link[], indent: number, columns: number, hasRoom: boolean) {
+// When the names fit after the line, on its row, the card goes there and takes
+// no rows of its own.
+function cards({Box, Link, Markdown, Text}: Table, links: Link[], line: Row, columns: number, hasRoom: boolean) {
   const names = links.map(shortName);
   const marks = links.map((_, index) => `${raised(index + 1)} `);
-  const rows = cardRows(
-    names.map((name, index) => `${marks[index]}${name}`),
-    columns - indent - CARD_MARGIN,
+  const shown = names.map((name, index) => `${marks[index]}${name}`);
+  const sameLine = sameLineLeft(line, shown, columns);
+  const rows = cardRows(shown, columns - line.indent - CARD_MARGIN);
+  const card = (top: number, left: number) => (
+    <Box
+      position="absolute"
+      top={top}
+      left={left}
+      right={0}
+      display="none"
+      flexWrap="wrap"
+      columnGap={CARD_GAP}
+      hover={{display: "flex"}}
+    >
+      {links.map((link, index) => (
+        <Markdown text={`${marks[index]}[${names[index]?.replace(/[[\]]/g, "\\$&")}](${link.url})`} />
+      ))}
+    </Box>
   );
 
-  // With a blank line of the Client's under the line, the card starts on it.
-  return (
-    <Box height={hasRoom ? rows - 1 : rows}>
+  // On the line's row the card is placed against the keyed Box around the
+  // line, whose first row is the line: its top is the line's top. Counted up
+  // from under the line, it sat high, as the hook's rows are taller.
+  // It is drawn in the line's font at its largest size, so the two are as tall.
+  if (sameLine !== undefined) {
+    const {size} = lineSize(line);
+
+    return (
       <Box
         position="absolute"
-        top={hasRoom ? -1 : 0}
-        left={indent}
+        top={0}
+        left={sameLine}
         right={0}
         display="none"
-        flexWrap="wrap"
         columnGap={CARD_GAP}
         hover={{display: "flex"}}
       >
         {links.map((link, index) => (
-          <Markdown text={`${marks[index]}[${names[index]?.replace(/[[\]]/g, "\\$&")}](${link.url})`} />
+          <Text mono size={size}>
+            {marks[index]}
+            <Link href={link.url}>
+              <Text underline>{names[index]}</Text>
+            </Link>
+          </Text>
         ))}
       </Box>
-    </Box>
-  );
+    );
+  }
+
+  // With a blank line of the Client's under the line, the card starts on it.
+  return <Box height={hasRoom ? rows - 1 : rows}>{card(hasRoom ? -1 : 0, line.indent)}</Box>;
 }
 
 export const register: Register = (on) => {
@@ -217,7 +296,7 @@ export const register: Register = (on) => {
           return (
             <Box key={`link-${index}`} flexDirection="column">
               {client}
-              {cards(table, segment.links, segment.rows[0]?.indent ?? 0, columns, segment.hasRoom === true)}
+              {cards(table, segment.links, segment.rows[0] ?? {indent: 0, parts: []}, columns, segment.hasRoom === true)}
             </Box>
           );
         })}
