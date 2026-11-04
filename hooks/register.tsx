@@ -2,8 +2,8 @@ import type {Elements, Register, TextProps} from "claude-code";
 
 type Table = Elements["desktop"];
 // `mark` is a link's number, raised, the same as on its card.
-export type Part = {text: string; isBold?: true; isItalic?: true; isLink?: true; mark?: string};
-type Style = Pick<Part, "isBold" | "isItalic">;
+export type Part = {text: string; isBold?: true; isItalic?: true; isStruck?: true; isLink?: true; mark?: string};
+type Style = Pick<Part, "isBold" | "isItalic" | "isStruck">;
 // A table's row, which the Client draws as a grid: `cells` are its columns and
 // `widths` each column's widest cell, in cells. `parts` holds the same text in
 // one line.
@@ -29,12 +29,13 @@ const HEADING = /^#{1,6}\s+/;
 // written link may go anywhere, a file as well: [x](hooks/register.tsx:42).
 // Italic, in stars or underscores, starts and ends at a word's edge and not by
 // a space, so snake_case, 2*3*4 and a lone * stay as written. Three stars are
-// bold and italic.
+// bold and italic. Struck words are in two tildes, so ~5 and ~one~ stay.
 const INLINE = new RegExp(
   [
     /(`[^`]*`)/,
     /\*\*\*(.+?)\*\*\*/,
     /\*\*(.+?)\*\*(?!\*)/,
+    /~~(?![\s~])(.+?)(?<![\s~])~~(?!~)/,
     /(?<![\w*])\*(?![\s*])(.+?)(?<![\s*])\*(?![\w*])/,
     /(?<!\w)_(?![\s_])(.+?)(?<![\s_])_(?!\w)/,
     /\[([^\]]+)\]\(([^)\s]+)\)/,
@@ -78,9 +79,10 @@ export function raised(number: number) {
   return [...String(number)].map((digit) => RAISED[Number(digit)]).join("");
 }
 
-// Cuts one line into what the Client draws: plain text, bold, italic and links,
-// each link also handed to `addLink` for the card under its line, which gives
-// back its number on the card. `style` is the bold or italic it sits inside.
+// Cuts one line into what the Client draws: plain text, bold, italic, struck
+// and links, each link also handed to `addLink` for the card under its line,
+// which gives back its number on the card. `style` is the bold, italic or
+// struck it sits inside.
 export function inline(text: string, addLink: (link: Link) => number | void, style: Style = {}): Part[] {
   const parts: Part[] = [];
   const push = (part: Part) => part.text !== "" && parts.push({...part, ...style});
@@ -89,7 +91,7 @@ export function inline(text: string, addLink: (link: Link) => number | void, sty
   let last = 0;
 
   for (const match of text.matchAll(INLINE)) {
-    const [whole, code, boldItalic, bold, starred, underscored, label, url, bare] = match;
+    const [whole, code, boldItalic, bold, struck, starred, underscored, label, url, bare] = match;
     const italic = starred ?? underscored;
 
     push({text: text.slice(last, match.index)});
@@ -101,6 +103,8 @@ export function inline(text: string, addLink: (link: Link) => number | void, sty
       parts.push(...inline(boldItalic, addLink, {...style, isBold: true, isItalic: true}));
     } else if (bold !== undefined) {
       parts.push(...inline(bold, addLink, {...style, isBold: true}));
+    } else if (struck !== undefined) {
+      parts.push(...inline(struck, addLink, {...style, isStruck: true}));
     } else if (italic !== undefined) {
       parts.push(...inline(italic, addLink, {...style, isItalic: true}));
     } else if (label !== undefined && url !== undefined) {

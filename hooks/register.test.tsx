@@ -52,6 +52,18 @@ test("italic is cut out of stars and underscores, inside bold too, and words wit
   ]);
 });
 
+test("struck words are cut out of two tildes, inside bold and around it, and one tilde stays as written", () => {
+  expect(inline("~~a~~ **b ~~c~~** ~~**d**~~", noLinks)).toEqual([
+    {text: "a", isStruck: true},
+    {text: " "},
+    {text: "b ", isBold: true},
+    {text: "c", isBold: true, isStruck: true},
+    {text: " "},
+    {text: "d", isBold: true, isStruck: true},
+  ]);
+  expect(inline("~5, a ~ tilde, ~one~, `~~c~~`", noLinks)).toEqual([{text: "~5, a ~ tilde, ~one~, "}, {text: "`~~c~~`"}]);
+});
+
 test("a link inside bold is bold, and is handed on for its card", () => {
   const links: unknown[] = [];
 
