@@ -142,6 +142,56 @@ export function inline(text: string, addLink: (link: Link) => number | void, sty
   return parts;
 }
 
+// A table line's cells, split at each | outside code and not after a
+// backslash, the outer pipes left out; an escaped \| is a pipe in its cell. A
+// line with an unclosed ` is split at every pipe.
+export function tableCells(line: string): string[] {
+  const trimmed = line.trim();
+  const hasCode = (trimmed.match(/`/g)?.length ?? 0) % 2 === 0;
+  const cells: string[] = [];
+  let cell = "";
+  let inCode = false;
+  let endsInPipe = false;
+
+  for (let index = 0; index < trimmed.length; index++) {
+    const letter = trimmed[index];
+
+    endsInPipe = false;
+
+    if (letter === "\\" && trimmed[index + 1] === "|") {
+      cell += "|";
+      index += 1;
+    } else if (letter === "|" && !inCode) {
+      cells.push(cell);
+      cell = "";
+      endsInPipe = true;
+    } else {
+      inCode = hasCode && letter === "`" ? !inCode : inCode;
+      cell += letter;
+    }
+  }
+
+  if (!endsInPipe) {
+    cells.push(cell);
+  }
+
+  return trimmed.startsWith("|") ? cells.slice(1) : cells;
+}
+
+// Whether a line starts a table: it starts with a pipe, or it has one and the
+// line under it is a separator with as many cells, as "a | b" over "--- | ---";
+// "a | b" over "---" is a line and a rule. It needs two cells at least, so a
+// pipe only in code, as in "run `ls | wc`" over "---", is a line too.
+export function startsTable(line: string, under: string | undefined) {
+  if (line.trimStart().startsWith("|")) {
+    return true;
+  }
+
+  const cells = tableCells(line).length;
+
+  return under !== undefined && cells >= 2 && SEPARATOR.test(under) && cells === tableCells(under).length;
+}
+
 // A table as a grid of cells, each column as wide as its widest cell until the
 // window is narrower, the header on a stronger background. Its links are
 // numbered through the table, as the table has one card, under it.
@@ -149,11 +199,10 @@ export function tableRows(lines: string[], addLink: (link: Link) => number | voi
   const first = lines[0] ?? "";
   const indent = first.length - first.trimStart().length;
   const hasHeader = lines.length > 1 && SEPARATOR.test(lines[1] ?? "");
-  const cut = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
   const table = lines
     .filter((_, index) => !(hasHeader && index === 1))
     .map((line, index) => {
-      const cells = cut(line).map((cell) => {
+      const cells = tableCells(line).map((cell) => {
         const parts = inline(cell.trim(), addLink);
         // In cells, as bold is drawn larger.
         const width = parts.reduce(
@@ -234,7 +283,9 @@ export function segments(text: string): Segment[] {
     table = undefined;
   };
 
-  for (const written of text.split("\n")) {
+  const writtenLines = text.split("\n");
+
+  for (const [index, written] of writtenLines.entries()) {
     const fence = FENCE.exec(written);
 
     if (fence) {
@@ -257,8 +308,9 @@ export function segments(text: string): Segment[] {
 
     const line = asEmoji(written);
 
-    // A table's lines are gathered, then drawn as rows when it ends.
-    if (line.trimStart().startsWith("|")) {
+    // A table's lines are gathered, then drawn as rows when it ends: from a line
+    // that starts one, then each line with a pipe.
+    if ((table && line.includes("|")) || startsTable(line, writtenLines[index + 1])) {
       (table ??= []).push(line);
       continue;
     }

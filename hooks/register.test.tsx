@@ -129,6 +129,19 @@ test("a table is a grid of cells, its header marked", () => {
   expect(rows[1]?.cells).toEqual([[{text: "ccc", isBold: true}], [{text: "d"}]]);
 });
 
+test("a table may leave out its outer pipes, and a pipe in code or after a backslash stays in its cell", () => {
+  const cellTexts = (text: string) =>
+    textRows(text)
+      .filter((row) => row.isTable)
+      .map((row) => (row.cells ?? []).map((cell) => cell.map((part) => part.text).join("")));
+
+  expect(cellTexts("a | b\n--- | ---\n1 | 2\n3 | 4 |\nafter")).toEqual([["a", "b"], ["1", "2"], ["3", "4"]]);
+  expect(cellTexts("x | y\n- | -\n`a | b` | a \\| b")).toEqual([["x", "y"], ["`a | b`", "a | b"]]);
+  expect(cellTexts("a | b, in a sentence\nnext")).toEqual([]);
+  expect(textRows("a | b\n---")).toMatchObject([{parts: [{text: "a | b"}]}, {isRule: true}]);
+  expect(textRows("run `ls | wc` now\n---")).toMatchObject([{parts: [{text: "run "}, {text: "`ls | wc`"}, {text: " now"}]}, {isRule: true}]);
+});
+
 test("a table with links is one run, its links numbered through it", () => {
   const result = segments(
     ["Before.", "| a | b |", "|---|---|", "| [x](hooks/a.ts) | c |", "| d | [y](https://a.example) |", "After."].join("\n"),
