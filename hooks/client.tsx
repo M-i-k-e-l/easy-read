@@ -43,8 +43,9 @@ function part({Text}: ClientElements, {text, isBold, isItalic, isStruck, isLink,
 }
 
 // A table's row: a cell per column on a background, as wide as the column's
-// widest cell. In a narrower window the cells shrink by their widths and wrap
-// inside themselves.
+// widest cell. In a narrower window the cells shrink and wrap inside
+// themselves; each shrinks by its width times its width, so a wide column gives
+// up far more than a short one, whose words stay whole.
 function grid(elements: ClientElements, row: Row, cells: Part[][], widths: number[]) {
   const {Box, Text} = elements;
 
@@ -53,7 +54,7 @@ function grid(elements: ClientElements, row: Row, cells: Part[][], widths: numbe
       {widths.map((width, column) => (
         <Box
           width={Math.ceil(width) + CELL_PADDING}
-          flexShrink={1}
+          flexShrink={Math.ceil(width) + CELL_PADDING}
           minWidth={1}
           paddingX="sm"
           paddingY="xs"
