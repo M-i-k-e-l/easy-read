@@ -87,6 +87,25 @@ test("a bare address leaves out a quote and the sentence's punctuation after it"
   ]);
 });
 
+test("an address keeps a pair of parentheses inside it, and leaves out a closing one with no opening one", () => {
+  const urls = (text: string) => {
+    const links: {url: string}[] = [];
+
+    inline(text, (link) => links.push(link));
+
+    return links.map((link) => link.url);
+  };
+
+  expect(urls("https://a.example/Mercury_(planet) and (see https://a.example/Mercury_(planet)).")).toEqual([
+    "https://a.example/Mercury_(planet)",
+    "https://a.example/Mercury_(planet)",
+  ]);
+  expect(urls("(see https://a.example/docs) and [m](https://a.example/Mercury_(planet))")).toEqual([
+    "https://a.example/docs",
+    "https://a.example/Mercury_(planet)",
+  ]);
+});
+
 test("a link to a file is a link, its card named by its label", () => {
   const links: unknown[] = [];
 

@@ -48,6 +48,8 @@ const QUOTE_CELLS = QUOTE_BAR + QUOTE_GAP;
 // A bare address stops at a quote or an angle bracket, and does not end in the
 // sentence's punctuation: "see https://a.example/docs." links to /docs. A
 // written link may go anywhere, a file as well: [x](hooks/register.tsx:42).
+// Either keeps a ( ) pair inside it, as in /wiki/Mercury_(planet), and leaves
+// out a ) with no ( before it, as in "(see https://a.example/x)".
 // Italic, in stars or underscores, starts and ends at a word's edge and not by
 // a space, so snake_case, 2*3*4 and a lone * stay as written. Three stars are
 // bold and italic. Struck words are in two tildes, so ~5 and ~one~ stay.
@@ -59,8 +61,8 @@ const INLINE = new RegExp(
     /~~(?![\s~])(.+?)(?<![\s~])~~(?!~)/,
     /(?<![\w*])\*(?![\s*])(.+?)(?<![\s*])\*(?![\w*])/,
     /(?<!\w)_(?![\s_])(.+?)(?<![\s_])_(?!\w)/,
-    /\[([^\]]+)\]\(([^)\s]+)\)/,
-    /(https?:\/\/[^\s)`"<>]*[^\s)`"<>.,;:!?'])/,
+    /\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/,
+    /(https?:\/\/(?:[^\s()`"<>]|\([^\s()`"<>]*\))*(?:[^\s()`"<>.,;:!?']|\([^\s()`"<>]*\)))/,
   ]
     .map((each) => each.source)
     .join("|"),
