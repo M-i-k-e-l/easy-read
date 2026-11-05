@@ -142,6 +142,20 @@ test("a table may leave out its outer pipes, and a pipe in code or after a backs
   expect(textRows("run `ls | wc` now\n---")).toMatchObject([{parts: [{text: "run "}, {text: "`ls | wc`"}, {text: " now"}]}, {isRule: true}]);
 });
 
+test("a table in a quote is read without its >s, and ends where the quote does", () => {
+  const rows = textRows("> a | b\n> --- | ---\n> 1 | 2\nc | d\n> | e |\n| f |");
+
+  expect(rows).toMatchObject([
+    {isTable: true, isHeader: true, quote: 1, cells: [[{text: "a"}], [{text: "b"}]]},
+    {isTable: true, quote: 1, cells: [[{text: "1"}], [{text: "2"}]]},
+    {parts: [{text: "c | d"}]},
+    {isTable: true, quote: 1, cells: [[{text: "e"}]]},
+    {isTable: true, cells: [[{text: "f"}]]},
+  ]);
+  expect(rows[4]).not.toHaveProperty("quote");
+  expect(textRows("a | b\n> --- | ---")).toMatchObject([{parts: [{text: "a | b"}]}, {quote: 1}]);
+});
+
 test("a table with links is one run, its links numbered through it", () => {
   const result = segments(
     ["Before.", "| a | b |", "|---|---|", "| [x](hooks/a.ts) | c |", "| d | [y](https://a.example) |", "After."].join("\n"),

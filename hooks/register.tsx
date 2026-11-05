@@ -142,6 +142,19 @@ export function inline(text: string, addLink: (link: Link) => number | void, sty
   return parts;
 }
 
+// A line without its quote's >s, and how many it had.
+function unquote(line: string) {
+  let quoted = line;
+  let quote = 0;
+
+  while (QUOTE.test(quoted)) {
+    quoted = quoted.replace(QUOTE, "");
+    quote += 1;
+  }
+
+  return {quoted, quote};
+}
+
 // A table line's cells, split at each | outside code and not after a
 // backslash, the outer pipes left out; an escaped \| is a pipe in its cell. A
 // line with an unclosed ` is split at every pipe.
@@ -267,11 +280,15 @@ export function segments(text: string): Segment[] {
       result.push({kind: "text", rows: [row], links});
     }
   };
+  // The quotes the open table is inside.
+  let tableQuote = 0;
   // A table with links is a run of its own, so its card sits right under it.
   const endTable = () => {
     if (table) {
       const links: Link[] = [];
-      const rows = tableRows(table, (link) => links.push(link));
+      const rows = tableRows(table, (link) => links.push(link)).map((row) =>
+        tableQuote > 0 ? {...row, quote: tableQuote} : row,
+      );
 
       if (links.length === 0) {
         rows.forEach((row) => add(row, []));
@@ -307,11 +324,24 @@ export function segments(text: string): Segment[] {
     }
 
     const line = asEmoji(written);
+    // A quote's >s are cut off and counted; what is left is read as any line.
+    const {quoted, quote} = unquote(line);
+    const under = writtenLines[index + 1];
+    const below = under === undefined ? undefined : unquote(under);
 
     // A table's lines are gathered, then drawn as rows when it ends: from a line
-    // that starts one, then each line with a pipe.
-    if ((table && line.includes("|")) || startsTable(line, writtenLines[index + 1])) {
-      (table ??= []).push(line);
+    // that starts one, then each line with a pipe in the same quote. A table
+    // in a quote is read without its >s, its separator too.
+    if (
+      (table && tableQuote === quote && quoted.includes("|")) ||
+      startsTable(quoted, below?.quote === quote ? below.quoted : undefined)
+    ) {
+      if (table && tableQuote !== quote) {
+        endTable();
+      }
+
+      tableQuote = quote;
+      (table ??= []).push(quoted);
       continue;
     }
 
@@ -325,15 +355,6 @@ export function segments(text: string): Segment[] {
       last.rows.push({indent: 0, parts: []});
       last.hasRoom = true;
       continue;
-    }
-
-    // A quote's >s are cut off and counted; what is left is read as any line.
-    let quoted = line;
-    let quote = 0;
-
-    while (QUOTE.test(quoted)) {
-      quoted = quoted.replace(QUOTE, "");
-      quote += 1;
     }
 
     const trimmed = quoted.trimStart();

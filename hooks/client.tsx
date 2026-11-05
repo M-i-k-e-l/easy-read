@@ -64,7 +64,7 @@ function grid(elements: ClientElements, row: Row, cells: Part[][], widths: numbe
         >
           {h(
             Text,
-            {mono: true, size: "caption"} as const,
+            {mono: true, size: "caption", ...(row.quote ? {color: QUOTE_COLOR} : {})} as const,
             ...(cells[column] ?? []).flatMap((each) => part(elements, each)),
           )}
         </Box>
@@ -82,7 +82,7 @@ export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSur
     const isLast = index === rows.length - 1;
 
     if (row.cells && row.widths) {
-      return grid(surface.elements, row, row.cells, row.widths);
+      return quoted(row, isLast, grid(surface.elements, row, row.cells, row.widths));
     }
 
     if (row.isRule) {
