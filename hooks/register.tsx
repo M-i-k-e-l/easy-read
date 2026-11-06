@@ -449,7 +449,10 @@ const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F
 const LETTER_CELLS = 0.8;
 const BOLD_CELLS = 1;
 const HEADING_CELLS = 1.45;
-// How far each Client overlaps the one under it, in rows of the hook's.
+// How far each Client overlaps the one under it, in rows of the hook's. More
+// cuts into a code fence or a table's card, and crowds a line under bold. In a
+// quote, the card rows' bars overlap the line's bars by as much, and the two
+// see-through greys show a faint notch there.
 const CLIENT_OVERLAP = -0.1;
 const WIDE_SCALE = 1.875;
 export function lineWidth({indent, quote = 0, marker, isHeading, parts}: Row) {
