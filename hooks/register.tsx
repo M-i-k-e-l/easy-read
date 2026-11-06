@@ -28,7 +28,7 @@ export type Row = {
 type Link = {label: string; url: string};
 type Segment =
   | {kind: "text"; rows: Row[]; links: Link[]; hasRoom?: true; isTable?: true}
-  | {kind: "code"; language: string; lines: string[]};
+  | {kind: "code"; language: string; lines: string[]; quote?: number};
 
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
 const HEADING = /^#{1,6}\s+/;
@@ -142,12 +142,13 @@ export function inline(text: string, addLink: (link: Link) => number | void, sty
   return parts;
 }
 
-// A line without its quote's >s, and how many it had.
-function unquote(line: string) {
+// A line without its quote's >s, and how many it had; at most `most` of them,
+// so a code line in a quote keeps the >s it holds past the quote's own.
+function unquote(line: string, most = Infinity) {
   let quoted = line;
   let quote = 0;
 
-  while (QUOTE.test(quoted)) {
+  while (quote < most && QUOTE.test(quoted)) {
     quoted = quoted.replace(QUOTE, "");
     quote += 1;
   }
@@ -266,6 +267,8 @@ export function tableRows(lines: string[], addLink: (link: Link) => number | voi
 export function segments(text: string): Segment[] {
   const result: Segment[] = [];
   let code: string[] | undefined;
+  // The quotes the open code fence is inside.
+  let codeQuote = 0;
   let table: string[] | undefined;
   // The list items above that are still open, outermost first, by indent and
   // whether each is a dot item, and the quote they are in.
@@ -303,23 +306,33 @@ export function segments(text: string): Segment[] {
   const writtenLines = text.split("\n");
 
   for (const [index, written] of writtenLines.entries()) {
-    const fence = FENCE.exec(written);
+    // A fence is read without its quote's >s, so one in a quote is code too.
+    // Its lines lose as many >s as the fence's own; a line in fewer quotes
+    // ends the quote, and the code with it, as in the app.
+    const raw = unquote(written, code ? codeQuote : Infinity);
 
-    if (fence) {
+    if (code && raw.quote < codeQuote) {
+      code = undefined;
+    }
+
+    const fence = FENCE.exec(raw.quoted);
+
+    if (fence && (!code || raw.quote === codeQuote)) {
       endTable();
 
       if (code) {
         code = undefined;
       } else {
         code = [];
-        result.push({kind: "code", language: fence[2] ?? "", lines: code});
+        codeQuote = raw.quote;
+        result.push({kind: "code", language: fence[2] ?? "", lines: code, ...(raw.quote > 0 ? {quote: raw.quote} : {})});
       }
 
       continue;
     }
 
     if (code) {
-      code.push(written);
+      code.push(raw.quoted);
       continue;
     }
 
@@ -609,13 +622,23 @@ export const register: Register = (on) => {
         {segments(e.props.text).map((segment, index, all) => {
           // Two fences in a row touch, where the app leaves a small gap
           // between them.
+          // A fence in a quote has the quote's bars beside it.
           if (segment.kind === "code") {
             const source = segment.lines.join("\n");
+            const code =
+              segment.language === "" ? <Code source={source} /> : <Code source={source} language={segment.language} />;
 
-            return segment.language === "" ? (
-              <Code source={source} />
+            return segment.quote ? (
+              <Box key={`code-${index}`} flexDirection="row" columnGap={QUOTE_GAP}>
+                {Array.from({length: segment.quote}, () => (
+                  <Box width={QUOTE_BAR} flexShrink={0} backgroundColor={QUOTE_BAR_COLOR} />
+                ))}
+                <Box flexGrow={1} flexShrink={1} flexDirection="column">
+                  {code}
+                </Box>
+              </Box>
             ) : (
-              <Code source={source} language={segment.language} />
+              code
             );
           }
 
@@ -634,7 +657,7 @@ export const register: Register = (on) => {
           // The quotes that go on under the card's rows: those the next line is
           // inside too.
           const after = all[index + 1];
-          const bars = after?.kind === "text" ? (after.rows[0]?.quote ?? 0) : 0;
+          const bars = (after?.kind === "text" ? after.rows[0]?.quote : after?.quote) ?? 0;
 
           return (
             <Box key={`link-${index}`} flexDirection="column">

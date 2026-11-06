@@ -172,6 +172,23 @@ test("a table with links is one run, its links numbered through it", () => {
   ]);
 });
 
+test("a fence in a quote is code, keeps the >s past the quote's own, and ends where the quote does", () => {
+  expect(segments("> a\n> ```ts\n> const b = 1;\n> > c\n> ```\n> d")).toMatchObject([
+    {kind: "text", rows: [{quote: 1, parts: [{text: "a"}]}]},
+    {kind: "code", language: "ts", quote: 1, lines: ["const b = 1;", "> c"]},
+    {kind: "text", rows: [{quote: 1, parts: [{text: "d"}]}]},
+  ]);
+  expect(segments("> ```\n> e\nf")).toMatchObject([
+    {kind: "code", quote: 1, lines: ["e"]},
+    {kind: "text", rows: [{parts: [{text: "f"}]}]},
+  ]);
+  expect(segments("```\n> g\n```")).toEqual([{kind: "code", language: "", lines: ["> g"]}]);
+  expect(segments("> > ```\n> > h\n> ```\n> i")).toMatchObject([
+    {kind: "code", quote: 2, lines: ["h"]},
+    {kind: "code", quote: 1, lines: ["i"]},
+  ]);
+});
+
 test("an older symbol is asked to draw as an emoji, once, and never inside a skin tone, a flag or a joined emoji", () => {
   expect(asEmoji("⚡ ☕ ♈")).toBe("⚡\uFE0F ☕\uFE0F ♈\uFE0F");
   expect(asEmoji("❤\uFE0F ⚡\uFE0F")).toBe("❤\uFE0F ⚡\uFE0F");
