@@ -354,10 +354,22 @@ test("a link's number is raised", () => {
   expect(raised(10)).toBe("¹⁰");
 });
 
+test("a heading's size is by its level: #, ##, then ### and deeper alike", () => {
+  expect(textRows("# a\n## b\n### c\n###### d\n#e").map((row) => row.headingSize)).toEqual([
+    "title",
+    "heading",
+    "body",
+    "body",
+    undefined,
+  ]);
+});
+
 test("a line's width is measured: bold and headings wider, wide letters wider still", () => {
   expect(lineWidth({indent: 2, parts: [{text: "abcde"}]})).toBe(6);
   expect(lineWidth({indent: 0, parts: [{text: "abcdefghij", isBold: true}]})).toBe(10);
   expect(lineWidth({indent: 0, isHeading: true, parts: [{text: "abcdefghij"}]})).toBe(15);
+  expect(lineWidth({indent: 0, isHeading: true, headingSize: "heading", parts: [{text: "abcdefghij"}]})).toBe(10);
+  expect(lineWidth({indent: 0, isHeading: true, headingSize: "body", parts: [{text: "abcdefghij"}]})).toBe(10);
   expect(lineWidth({indent: 0, parts: [{text: "中文😀"}]})).toBe(5);
   expect(lineWidth({indent: 0, parts: [{text: "xxxx", isLink: true, mark: "¹"}]})).toBe(4);
 });

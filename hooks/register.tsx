@@ -12,6 +12,8 @@ type Style = Pick<Part, "isBold" | "isItalic" | "isStruck">;
 // `level` is how many dot items a dot item is nested under, counted from 0, so
 // a dot list under a number starts over, as the app draws it.
 // `isRule` is a line of only ---, *** or ___, drawn as a thin line across.
+// `headingSize` is a heading's size by its level: # the largest, ## a size
+// down, and ### or deeper a size down again, still larger than a line.
 export type Row = {
   indent: number;
   quote?: number;
@@ -19,6 +21,7 @@ export type Row = {
   level?: number;
   isRule?: true;
   isHeading?: true;
+  headingSize?: HeadingSize;
   isTable?: true;
   isHeader?: true;
   cells?: Part[][];
@@ -26,12 +29,14 @@ export type Row = {
   parts: Part[];
 };
 type Link = {label: string; url: string};
+export type HeadingSize = "title" | "heading" | "body";
 type Segment =
   | {kind: "text"; rows: Row[]; links: Link[]; hasRoom?: true; isTable?: true}
   | {kind: "code"; language: string; lines: string[]; quote?: number; indent?: number};
 
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
-const HEADING = /^#{1,6}\s+/;
+const HEADING = /^(#{1,6})\s+/;
+const HEADING_SIZES: HeadingSize[] = ["title", "heading", "body"];
 const LIST_MARKER = /^([-*+]|\d+[.)])\s+/;
 const DOT_MARKER = /^[-*+]$/;
 // Three or more of the same -, * or _, spaces between them allowed.
@@ -393,7 +398,8 @@ export function segments(text: string): Segment[] {
     }
 
     const links: Link[] = [];
-    const isHeading = HEADING.test(trimmed);
+    const heading = HEADING.exec(trimmed);
+    const isHeading = heading !== null;
     const marker = isHeading ? undefined : LIST_MARKER.exec(trimmed);
     const text = isHeading ? trimmed.replace(HEADING, "") : marker ? trimmed.slice(marker[0].length) : trimmed;
     const indent = quoted.length - trimmed.length;
@@ -419,7 +425,9 @@ export function segments(text: string): Segment[] {
       ...(quote > 0 ? {quote} : {}),
       ...(marker?.[1] !== undefined ? {marker: marker[1]} : {}),
       ...(marker && level > 0 ? {level} : {}),
-      ...(isHeading ? {isHeading: true} : {}),
+      ...(heading
+        ? {isHeading: true, headingSize: HEADING_SIZES[Math.min(heading[1]!.length, HEADING_SIZES.length) - 1]}
+        : {}),
       parts: inline(text, (link) => links.push(link)),
     };
 
@@ -476,20 +484,23 @@ const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F
 const LETTER_CELLS = 0.8;
 const BOLD_CELLS = 1;
 const HEADING_CELLS = 1.45;
+// A letter of each heading size: ## is bold's size, ### measured between it and
+// a line's.
+const HEADING_SIZE_CELLS: Record<HeadingSize, number> = {title: HEADING_CELLS, heading: BOLD_CELLS, body: 0.95};
 // How far each Client overlaps the one under it, in rows of the hook's. More
 // cuts into a code fence or a table's card, and crowds a line under bold. In a
 // quote, the card rows' bars overlap the line's bars by as much, and the two
 // see-through greys show a faint notch there.
 const CLIENT_OVERLAP = -0.1;
 const WIDE_SCALE = 1.875;
-export function lineWidth({indent, quote = 0, marker, isHeading, parts}: Row) {
+export function lineWidth({indent, quote = 0, marker, isHeading, headingSize, parts}: Row) {
   // A quote's bars, and a marker, in the line's largest size, and the space
   // after it.
   let width =
     indent + quote * QUOTE_CELLS + (marker === undefined ? 0 : marker.length * lineSize({indent, parts}).cells + LETTER_CELLS);
 
   for (const {text, isBold, mark} of parts) {
-    const cells = isHeading ? HEADING_CELLS : isBold ? BOLD_CELLS : LETTER_CELLS;
+    const cells = isHeading ? HEADING_SIZE_CELLS[headingSize ?? "title"] : isBold ? BOLD_CELLS : LETTER_CELLS;
 
     for (const letter of text + (mark ?? "")) {
       width += letter === EMOJI_STYLE ? 0 : (WIDE.test(letter) ? WIDE_SCALE : 1) * cells;
@@ -502,9 +513,12 @@ export function lineWidth({indent, quote = 0, marker, isHeading, parts}: Row) {
 
 // The largest size on a line, as its row is as tall as its largest letters: a
 // card on the row in that size is as tall as the line, so their middles meet.
-export function lineSize({isHeading, parts}: Row): {size: NonNullable<TextProps["size"]>; cells: number} {
+export function lineSize({isHeading, headingSize = "title", parts}: Row): {
+  size: NonNullable<TextProps["size"]>;
+  cells: number;
+} {
   if (isHeading) {
-    return {size: "title", cells: HEADING_CELLS};
+    return {size: headingSize, cells: HEADING_SIZE_CELLS[headingSize]};
   }
 
   return parts.some((part) => part.isBold) ? {size: "heading", cells: BOLD_CELLS} : {size: "caption", cells: LETTER_CELLS};

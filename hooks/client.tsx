@@ -31,9 +31,11 @@ const QUOTE_COLOR = "inactive";
 const RULE_HEIGHT = 0.05;
 
 // A link is underlined, and its number, raised and not underlined, follows it.
-function part({Text}: ClientElements, {text, isBold, isItalic, isStruck, isLink, mark}: Part) {
+// Bold is a size larger and bold; in a heading it keeps the heading's size, so
+// only its weight sets it apart.
+function part({Text}: ClientElements, {text, isBold, isItalic, isStruck, isLink, mark}: Part, inHeading = false) {
   const style: TextProps = {
-    ...(isBold ? {size: "heading", weight: "bold"} : {}),
+    ...(isBold ? {...(inHeading ? {} : {size: "heading"}), weight: "bold"} : {}),
     ...(isItalic ? {italic: true} : {}),
     ...(isStruck ? {strikethrough: true} : {}),
   };
@@ -102,9 +104,11 @@ export default function EasyReadClient({rows}: {rows: Row[]}, surface: ClientSur
     }
 
     // A blank line is a newline, not a space, so a copy of it holds nothing.
-    const children = row.parts.length === 0 ? ["\n"] : row.parts.flatMap((each) => part(surface.elements, each));
+    const children =
+      row.parts.length === 0 ? ["\n"] : row.parts.flatMap((each) => part(surface.elements, each, row.isHeading === true));
+    // A heading is large and regular, so bold inside it shows.
     const props: TextProps = {
-      ...(row.isHeading ? {size: "title", weight: "bold"} : {size: "caption"}),
+      ...(row.isHeading ? {size: row.headingSize ?? "title", weight: "regular"} : {size: "caption"}),
       ...(row.quote ? {color: QUOTE_COLOR} : {}),
     };
 
