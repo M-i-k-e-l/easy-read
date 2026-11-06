@@ -28,7 +28,7 @@ export type Row = {
 type Link = {label: string; url: string};
 type Segment =
   | {kind: "text"; rows: Row[]; links: Link[]; hasRoom?: true; isTable?: true}
-  | {kind: "code"; language: string; lines: string[]; quote?: number};
+  | {kind: "code"; language: string; lines: string[]; quote?: number; indent?: number};
 
 const FENCE = /^\s*(```|~~~)\s*(\S*)/;
 const HEADING = /^#{1,6}\s+/;
@@ -267,8 +267,9 @@ export function tableRows(lines: string[], addLink: (link: Link) => number | voi
 export function segments(text: string): Segment[] {
   const result: Segment[] = [];
   let code: string[] | undefined;
-  // The quotes the open code fence is inside.
+  // The quotes the open code fence is inside, and the spaces before it.
   let codeQuote = 0;
+  let codeIndent = 0;
   let table: string[] | undefined;
   // The list items above that are still open, outermost first, by indent and
   // whether each is a dot item, and the quote they are in.
@@ -325,14 +326,27 @@ export function segments(text: string): Segment[] {
       } else {
         code = [];
         codeQuote = raw.quote;
-        result.push({kind: "code", language: fence[2] ?? "", lines: code, ...(raw.quote > 0 ? {quote: raw.quote} : {})});
+        codeIndent = raw.quoted.length - raw.quoted.trimStart().length;
+        // Only a fence under a list item is pushed in; one outside a list is
+        // at the left edge, as the app draws it, its spaces still taken off.
+        const isInList = listIndents.length > 0 && listQuote === raw.quote;
+
+        result.push({
+          kind: "code",
+          language: fence[2] ?? "",
+          lines: code,
+          ...(raw.quote > 0 ? {quote: raw.quote} : {}),
+          ...(codeIndent > 0 && isInList ? {indent: codeIndent} : {}),
+        });
       }
 
       continue;
     }
 
+    // A code line loses as many spaces as its fence is indented, as in the
+    // app, so a fence under a list item does not hold the item's indent.
     if (code) {
-      code.push(raw.quoted);
+      code.push(raw.quoted.replace(new RegExp(`^ {0,${codeIndent}}`), ""));
       continue;
     }
 
@@ -622,11 +636,19 @@ export const register: Register = (on) => {
         {segments(e.props.text).map((segment, index, all) => {
           // Two fences in a row touch, where the app leaves a small gap
           // between them.
-          // A fence in a quote has the quote's bars beside it.
+          // A fence in a quote has the quote's bars beside it; an indented
+          // one, as under a list item, is pushed in as a line is.
           if (segment.kind === "code") {
             const source = segment.lines.join("\n");
-            const code =
+            const drawn =
               segment.language === "" ? <Code source={source} /> : <Code source={source} language={segment.language} />;
+            const code = segment.indent ? (
+              <Box paddingLeft={segment.indent} flexDirection="column">
+                {drawn}
+              </Box>
+            ) : (
+              drawn
+            );
 
             return segment.quote ? (
               <Box key={`code-${index}`} flexDirection="row" columnGap={QUOTE_GAP}>

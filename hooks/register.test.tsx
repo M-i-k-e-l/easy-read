@@ -189,6 +189,16 @@ test("a fence in a quote is code, keeps the >s past the quote's own, and ends wh
   ]);
 });
 
+test("a fence under a list item keeps its indent, one outside a list does not, and its lines lose as many spaces, no more", () => {
+  expect(segments("- a\n  ```\n  b\n    c\n d\n  ```")).toMatchObject([
+    {kind: "text"},
+    {kind: "code", indent: 2, lines: ["b", "  c", "d"]},
+  ]);
+  expect(segments("> - e\n>   ```\n>   f\n>   ```")[1]).toMatchObject({kind: "code", quote: 1, indent: 2, lines: ["f"]});
+  expect(segments("```\n  g\n```")).toEqual([{kind: "code", language: "", lines: ["  g"]}]);
+  expect(segments("h\n  ```\n  i\n  ```")[1]).toEqual({kind: "code", language: "", lines: ["i"]});
+});
+
 test("an older symbol is asked to draw as an emoji, once, and never inside a skin tone, a flag or a joined emoji", () => {
   expect(asEmoji("⚡ ☕ ♈")).toBe("⚡\uFE0F ☕\uFE0F ♈\uFE0F");
   expect(asEmoji("❤\uFE0F ⚡\uFE0F")).toBe("❤\uFE0F ⚡\uFE0F");
