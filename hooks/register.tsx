@@ -550,7 +550,9 @@ function cards(
       >
         {links.map((link, index) =>
           // The app's Link opens only a web address here; a file's goes to its
-          // Markdown, written as a reply writes it.
+          // Markdown, written as a reply writes it. So a file's name is in the
+          // app's font, not mono: a Markdown has no mono, and the name written
+          // as code in its link is drawn the same.
           WEB.test(link.url) ? (
             <Text mono size={size}>
               {marks[index]}
