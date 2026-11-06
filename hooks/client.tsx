@@ -46,6 +46,9 @@ function part({Text}: ClientElements, {text, isBold, isItalic, isStruck, isLink,
 // widest cell. In a narrower window the cells shrink and wrap inside
 // themselves; each shrinks by its width times its width, so a wide column gives
 // up far more than a short one, whose words stay whole.
+// A copy across cells puts each cell on a line of its own, not a row on a line
+// with tabs between its cells as the app's table: a Box is copied as a block,
+// and nothing in a Client lays one inline or sets the text a copy takes.
 function grid(elements: ClientElements, row: Row, cells: Part[][], widths: number[]) {
   const {Box, Text} = elements;
 
