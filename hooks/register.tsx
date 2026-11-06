@@ -607,6 +607,8 @@ export const register: Register = (on) => {
     return (
       <Box flexDirection="column">
         {segments(e.props.text).map((segment, index, all) => {
+          // Two fences in a row touch, where the app leaves a small gap
+          // between them.
           if (segment.kind === "code") {
             const source = segment.lines.join("\n");
 
