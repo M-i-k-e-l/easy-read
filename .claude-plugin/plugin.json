@@ -1,5 +1,7 @@
 {
   "name": "easy-read",
   "version": "0.1.0",
-  "description": "Draws Claude's replies in the desktop app in an easier-to-read font, with real bold."
+  "description": "Draws Claude's replies in the desktop app in an easier-to-read font, with real bold.",
+  "author": { "name": "M-i-k-e-l" },
+  "license": "MIT"
 }

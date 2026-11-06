@@ -1,0 +1,12 @@
+{
+  "name": "easy-read",
+  "description": "The easy-read mod: Claude's replies in an easier-to-read font in the desktop app.",
+  "owner": { "name": "M-i-k-e-l" },
+  "plugins": [
+    {
+      "name": "easy-read",
+      "source": "./",
+      "description": "Draws Claude's replies in the desktop app in an easier-to-read font, with real bold."
+    }
+  ]
+}
