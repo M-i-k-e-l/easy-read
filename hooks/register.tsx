@@ -449,6 +449,8 @@ const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F
 const LETTER_CELLS = 0.8;
 const BOLD_CELLS = 1;
 const HEADING_CELLS = 1.45;
+// How far each Client overlaps the one under it, in rows of the hook's.
+const CLIENT_OVERLAP = -0.1;
 const WIDE_SCALE = 1.875;
 export function lineWidth({indent, quote = 0, marker, isHeading, parts}: Row) {
   // A quote's bars, and a marker, in the line's largest size, and the space
@@ -612,8 +614,12 @@ export const register: Register = (on) => {
             );
           }
 
+          // A one-line Client takes a whole row of the hook's, taller than a
+          // line of its own, so the one under it is pulled up by the rest.
           const client = (
-            <Client key={`text-${index}`} module="./client.tsx" props={{rows: segment.rows}} width="100%" />
+            <Box key={`run-${index}`} flexDirection="column" marginBottom={CLIENT_OVERLAP}>
+              <Client key={`text-${index}`} module="./client.tsx" props={{rows: segment.rows}} width="100%" />
+            </Box>
           );
 
           if (segment.links.length === 0) {
