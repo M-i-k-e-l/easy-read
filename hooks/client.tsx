@@ -49,6 +49,9 @@ function part({Text}: ClientElements, {text, isBold, isItalic, isStruck, isLink,
 // A copy across cells puts each cell on a line of its own, not a row on a line
 // with tabs between its cells as the app's table: a Box is copied as a block,
 // and nothing in a Client lays one inline or sets the text a copy takes.
+// When the columns' longest words cannot all fit side by side, as in a table
+// of many equally wide columns, every column breaks its words: a Client cannot
+// scroll, and a column held at its longest word runs off the right edge.
 function grid(elements: ClientElements, row: Row, cells: Part[][], widths: number[]) {
   const {Box, Text} = elements;
 
