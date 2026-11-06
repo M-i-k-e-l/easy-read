@@ -679,9 +679,14 @@ export const register: Register = (on) => {
           }
 
           // A one-line Client takes a whole row of the hook's, taller than a
-          // line of its own, so the one under it is pulled up by the rest.
+          // line of its own, so the one under it is pulled up by the rest. The
+          // last has nothing under it, and pulled up, the reply cuts it off.
           const client = (
-            <Box key={`run-${index}`} flexDirection="column" marginBottom={CLIENT_OVERLAP}>
+            <Box
+              key={`run-${index}`}
+              flexDirection="column"
+              {...(index < all.length - 1 ? {marginBottom: CLIENT_OVERLAP} : {})}
+            >
               <Client key={`text-${index}`} module="./client.tsx" props={{rows: segment.rows}} width="100%" />
             </Box>
           );
